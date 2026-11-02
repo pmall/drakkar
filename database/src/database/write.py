@@ -373,7 +373,7 @@ def add_descriptions(
     conn: psycopg.Connection, items: Sequence[NewDescription], *, commit: bool = False
 ) -> Outcome:
     """Add new descriptions, each with a new `CW` stable ID, version 1."""
-    return _write(conn, commit, lambda cur: _apply_rows(cur, items, _add))
+    return write_batch(conn, [], items, [], commit=commit)
 
 
 # --- Revising -----------------------------------------------------------------------------------
@@ -539,8 +539,7 @@ def revise_descriptions(
     Revisions are applied before removals, so that a duplicate is compared with its survivor
     as revised.
     """
-    _once(revisions)
-    return _write(conn, commit, lambda cur: _apply_rows(cur, revisions, _revise, order=_removal))
+    return write_batch(conn, revisions, [], [], commit=commit)
 
 
 def _once(revisions: Sequence[Revision]) -> None:
@@ -566,8 +565,6 @@ NEW_NOTE = "concat_ws(E'\\n---\\n', nullif(%s::text, ''), nullif(annotation, '')
 
 def _publication(cur: Any, update: PublicationUpdate, author: str = "") -> str:
     association = _writable(vh_association(cur, update.pmid))
-    if update.state not in ("selected", "curated"):
-        raise InvalidRow(f"state {update.state!r} is not selected or curated")
     cur.execute(
         f"UPDATE associations SET state = %s, annotation = {NEW_NOTE}, ai_pass_at = now(), "
         "updated_at = now() WHERE id = %s",
@@ -593,11 +590,7 @@ def update_publications(
 ) -> Outcome:
     """Set the state of publications of vh runs at the end of a pass (`ai_pass_at`), the note of
     the pass, after its date and its author (optional), first in their notes."""
-
-    def publication(cur: Any, update: PublicationUpdate) -> str:
-        return _publication(cur, update, author)
-
-    return _write(conn, commit, lambda cur: _apply_rows(cur, updates, publication))
+    return write_batch(conn, [], [], updates, author=author, commit=commit)
 
 
 # --- A batch ------------------------------------------------------------------------------------

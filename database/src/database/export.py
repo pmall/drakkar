@@ -63,6 +63,7 @@ from openpyxl import Workbook
 from database.align import written
 from database.db import connect
 from database.generic import proteins_of
+from database.read import taxon_names
 
 VH = [
     "stable_id",
@@ -321,16 +322,8 @@ def export(
             f"{generic} is not in step with the descriptions exported, nothing written: "
             "the export skill brings it in step (database-generic sync)\n" + "\n".join(missing)
         )
-    cur.execute(
-        """
-        SELECT t.ncbi_taxon_id, n.name
-        FROM taxon AS t
-        JOIN taxon_name AS n ON n.taxon_id = t.taxon_id AND n.name_class = 'scientific name'
-        WHERE t.ncbi_taxon_id = ANY(%s)
-        """,
-        (list({row["strain_ncbi_taxon_id"] for row in vh}),),
-    )
-    strains: dict[int, str] = dict(cur.fetchall())  # a taxon missing from NCBI has no name
+    # a taxon missing from NCBI has no name
+    strains = taxon_names(cur, {row["strain_ncbi_taxon_id"] for row in vh})
     for row in vh:
         taxon = row["strain_ncbi_taxon_id"]
         row["species_ncbi_taxon_id"], row["species"], row["protein"] = proteins[

@@ -276,7 +276,7 @@ def as_png(name: str, body: bytes) -> list[tuple[str, bytes]]:
             if block["type"] == 1
         ]
     images = [
-        cast(bytes, pymupdf.Pixmap(pymupdf.csRGB, pymupdf.Pixmap(b["image"])).tobytes("png"))  # pyright: ignore[reportUnknownMemberType]
+        cast(bytes, pymupdf.Pixmap(pymupdf.csRGB, pymupdf.Pixmap(b["image"])).tobytes("png"))
         for b in blocks
     ]
     stem = Path(name).stem

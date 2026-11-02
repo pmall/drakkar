@@ -318,10 +318,6 @@ def report(outcome: Outcome, wheres: Sequence[str]) -> str:
     return "\n".join(lines)
 
 
-def _author_option(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--author", default="")
-
-
 def _command(
     read: Callable[[Sequence[Path]], list[tuple[str, Any]]],
     write: Callable[..., Outcome],
@@ -333,7 +329,7 @@ def _command(
     )
     parser.add_argument("files", type=Path, nargs="*")
     if author:
-        _author_option(parser)
+        parser.add_argument("--author", default="")
     parser.add_argument("--commit", action="store_true")
     args = parser.parse_args()
     options = {"author": args.author} if author else {}
@@ -364,7 +360,7 @@ def batch_main() -> None:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("dir", type=Path)
-    _author_option(parser)
+    parser.add_argument("--author", default="")
     parser.add_argument("--commit", action="store_true")
     args = parser.parse_args()
     directory = cast(Path, args.dir)

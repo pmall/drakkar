@@ -192,6 +192,19 @@ def _lineage(
     return walked
 
 
+def lineages(cur: Any, ncbi_ids: set[int]) -> dict[int, list[tuple[int, str, str]]]:
+    """Each taxon, by its NCBI ID, and the taxa above it up to its family, or to the root when it
+    has none: NCBI ID, rank, scientific name. A taxon the NCBI taxonomy has no row for has no
+    lineage."""
+    cur.execute(
+        "SELECT ncbi_taxon_id, taxon_id FROM taxon WHERE ncbi_taxon_id = ANY(%s)",
+        (list(ncbi_ids),),
+    )
+    internal: dict[int, int] = dict(cur.fetchall())
+    nodes = _ancestors(cur, list(set(internal.values())))
+    return {i: _lineage(nodes, internal[i]) if i in internal else [] for i in ncbi_ids}
+
+
 def _written(lineage: list[tuple[int, str, str]]) -> str:
     return " < ".join(f"{ncbi_id} {name}" for ncbi_id, _, name in lineage)
 
@@ -256,10 +269,6 @@ def _term_rank(text: str, names: list[str]) -> int:
         return 2
     held = max(sum(w in n for w in words) for n in bare) if bare else 0
     return 3 + len(words) - held if held else UNMATCHED
-
-
-def database(reviewed: bool) -> str:
-    return "SP" if reviewed else "TR"
 
 
 # --- Accessions as publications write them -----------------------------------------------------
@@ -422,13 +431,7 @@ def _entry(cur: Any, accession: str) -> str:
     )
     id_, type_, description, taxon, sequences, written, features = cur.fetchone()
     isoforms = cast(dict[str, str], json.loads(sequences))
-    cur.execute("SELECT taxon_id FROM taxon WHERE ncbi_taxon_id = %s", (taxon,))
-    row = cur.fetchone()
-    lineage = (
-        _written(_lineage(_ancestors(cur, [row[0]]), row[0]))
-        if row
-        else f"{taxon} not in the NCBI taxonomy"
-    )
+    lineage = _written(lineages(cur, {taxon})[taxon]) or f"{taxon} not in the NCBI taxonomy"
     lines = [
         f"# {accession}: {description}",
         "",
@@ -490,7 +493,7 @@ def _described(row: tuple[Any, ...], names: dict[int, str]) -> str:
     accession, is_reviewed, gene, description, taxon_id, _, length = row[:7]
     taxon_name = names.get(taxon_id, "not in the NCBI taxonomy")
     return (
-        f"{accession}\t{database(is_reviewed)}\t{gene}\t{description}\t"
+        f"{accession}\t{'SP' if is_reviewed else 'TR'}\t{gene}\t{description}\t"
         f"{taxon_id} {taxon_name}\t{length}"
     )
 

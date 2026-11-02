@@ -1,10 +1,11 @@
 """The publications file of a curation batch, from its publication notes.
 
-uv run curation-notes <dir>
-    writes `<dir>/publications.jsonl` from each `<dir>/<pmid>/curation.txt`, as written: one row
-    per note, the PMID its directory's name, the state `selected` when the note starts with
-    `SELECTED`, `curated` otherwise; an empty note gives no row. It never refuses a note: the
-    write checks the file.
+    uv run curation-notes <dir>
+
+Writes `<dir>/publications.jsonl` from each `<dir>/<pmid>/curation.txt`, as written: one row per
+note, the PMID its directory's name, the state `selected` when the note starts with `SELECTED`,
+`curated` otherwise; an empty note gives no row. It never refuses a note: the write checks the
+file.
 """
 
 import argparse

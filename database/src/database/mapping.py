@@ -18,7 +18,7 @@ from database.align import MIN_IDENTITY, best_identity, map_sequence, read_writt
 from database.check import AMINO_ACIDS
 from database.db import connect, parse_args
 from database.read import label_of, location, spaced
-from database.write import InvalidRow, snapshot_of
+from database.write import snapshot_of
 
 
 def _occurrences(aligned: dict[str, Any], canonical: str, start: int) -> str:
@@ -48,7 +48,7 @@ def mapping(cur: Any, interactor: str, sequences: list[str]) -> str:
         start, stop = start or 1, stop or snapshot.length
         if not 1 <= start <= stop <= snapshot.length:
             raise ValueError(f"{start}-{stop} is not a stretch of 1-{snapshot.length}")
-    except (ValueError, InvalidRow) as e:
+    except ValueError as e:  # an `InvalidRow` too
         return f"{interactor}: {e}"
     for text in sequences:
         if why := spaced(text):

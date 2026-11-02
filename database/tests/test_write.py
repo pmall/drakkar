@@ -137,7 +137,7 @@ def test_rename_an_interactor_carried_by_two_descriptions(conn):
     assert outcome.ok and outcome.committed
     names = conn.execute(
         "SELECT stable_id, version, name2 FROM descriptions WHERE deleted_at IS NULL "
-        "AND stable_id IN ('EY73D2C965', 'EYF737084C') ORDER BY 1"
+        "AND stable_id IN ('EY73D2C965', 'EYF737084C') ORDER BY stable_id"
     ).fetchall()
     assert names == [("EY73D2C965", 2, "orf6"), ("EYF737084C", 2, "orf6")]
 

@@ -38,6 +38,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+from database import read
 from database.db import connect
 
 SPECIES = ["family_ncbi_taxon_id", "ncbi_taxon_id", "name", "publications"]
@@ -61,45 +62,6 @@ def _write(path: Path, columns: list[str], rows: list[list[Any]]) -> None:
         writer = csv.writer(f, delimiter="\t", lineterminator="\n")
         writer.writerow(columns)
         writer.writerows(rows)
-
-
-def _lineages(cur: Any, ncbi_ids: set[int]) -> dict[int, list[tuple[int, str, str]]]:
-    """Each taxon and the taxa above it up to its family, or to the root when it has none: NCBI
-    ID, rank, scientific name. Walked up by parent, one level per query: an ancestor is an index
-    lookup. A taxon the NCBI taxonomy has no row for has no lineage."""
-    cur.execute(
-        "SELECT ncbi_taxon_id, taxon_id FROM taxon WHERE ncbi_taxon_id = ANY(%s)",
-        (list(ncbi_ids),),
-    )
-    internal: dict[int, int] = dict(cur.fetchall())
-    nodes: dict[int, tuple[int, int, str, str]] = {}
-    level = list(set(internal.values()))
-    while level:
-        cur.execute(
-            """
-            SELECT t.taxon_id, t.parent_taxon_id, t.ncbi_taxon_id, t.node_rank, n.name
-            FROM taxon AS t
-            LEFT JOIN taxon_name AS n
-              ON n.taxon_id = t.taxon_id AND n.name_class = 'scientific name'
-            WHERE t.taxon_id = ANY(%s)
-            """,
-            (level,),
-        )
-        rows = cur.fetchall()
-        nodes.update({t: (p, i, r, n or str(i)) for t, p, i, r, n in rows})
-        level = list({p for t, p, _, r, _ in rows if r != "family" and p != t} - nodes.keys())
-    lineages: dict[int, list[tuple[int, str, str]]] = {}
-    for ncbi_id in ncbi_ids:
-        walked: list[tuple[int, str, str]] = []
-        node = internal.get(ncbi_id)
-        while node is not None:
-            parent, i, rank, name = nodes[node]
-            walked.append((i, rank, name))
-            if rank == "family" or parent == node:
-                break
-            node = parent
-        lineages[ncbi_id] = walked
-    return lineages
 
 
 def _species_of(
@@ -135,7 +97,7 @@ def proteins_of(
         (int(r["ncbi_taxon_id"]), r["generic_name"]): r["protein"]
         for r in _read(directory / "proteins.tsv", PROTEINS)
     }
-    lineages = _lineages(cur, {t for t, _ in names})
+    lineages = read.lineages(cur, {t for t, _ in names})
     proteins: dict[tuple[int, str], tuple[int, str, str]] = {}
     unplaced: set[int] = set()
     unlisted: set[int] = set()
@@ -192,7 +154,7 @@ def sync(cur: Any, directory: Path) -> str:
     )
     pmids: list[tuple[int, int]] = cur.fetchall()
     taxa = {t for t, _, _ in names} | {t for t, _ in pmids}
-    lineages = _lineages(cur, taxa | listed.keys())
+    lineages = read.lineages(cur, taxa | listed.keys())
 
     def species_of(taxon: int) -> int | None:
         return _species_of(taxon, lineages, listed, placed)
