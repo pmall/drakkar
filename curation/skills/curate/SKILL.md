@@ -14,9 +14,9 @@ You run a curation batch: publications, each curated by a `curator` agent from i
    - `<run>`: the oldest run with publications `selected` with no AI pass and no live description.
    - `<batch>`: the batch directory, `<workdir>/run<run>/batch<n>/`, `<n>` the next batch number in `<workdir>/run<run>/`.
    - The publications: 20 at most of the run's publications `selected` with no AI pass, with no live description and listed in no `pmids.txt` of the run's batches.
-   - The author: your model ID as your system prompt gives it, `$CLAUDE_EFFORT` your effort and `$AI_AGENT` the Claude Code running you, as in `claude-opus-5-5 (effort high, claude-code_2-1-312_agent)`; the curators run on the same model and effort.
+   - The author: your model ID as your system prompt gives it, `$CLAUDE_EFFORT` your effort, `$AI_AGENT` the Claude Code running you and `git rev-parse --short HEAD` the commit of this repository, as in `claude-opus-5-5 (effort high, claude-code_2-1-312_agent, commit 3f06368)`; the curators run on the same model and effort.
 
-   Write them at once, as the model and the effort may change during the session and other sessions select their publications outside this batch: `mkdir -p <batch> && echo "<model> (effort $CLAUDE_EFFORT, $AI_AGENT)" > <batch>/author.txt`, then the publications in `<batch>/pmids.txt`, one per line. `pmids.txt` is the batch, never changed.
+   Write them at once, as the model and the effort may change during the session and other sessions select their publications outside this batch: `mkdir -p <batch> && echo "<model> (effort $CLAUDE_EFFORT, $AI_AGENT, commit $(git rev-parse --short HEAD))" > <batch>/author.txt`, then the publications in `<batch>/pmids.txt`, one per line. `pmids.txt` is the batch, never changed.
 
 2. **Full texts**: a publication directory, `<batch>/<pmid>/`, with its `manifest.json` is ready (files the user provided). Fetch the others: `mkdir -p <batch>/<pmid> && uv run curation-fetch <batch>/<pmid> <pmid> > <batch>/<pmid>/fetch.txt`. The report's first line says where the article comes from, or why there is none; the manifest is written only when the article could be had and converted. Read the reports, never the full texts.
 
@@ -33,7 +33,7 @@ You run a curation batch: publications, each curated by a `curator` agent from i
 
 6. **Reply**: what each batch file holds, in descriptions and publications; the refused rows and errors; the publications without the article, not curated or with a relevant file missing, with why; from the notes, the `best-effort` values and the supplementary files downloaded or not; from the agents' replies, the tool errors.
 
-7. **Commit**, after the go: `uv run database-batch <batch> --author "$(cat <batch>/author.txt)" --commit` writes the new descriptions, the publication states and notes, each note after its date and the author recorded at the start (`[2026-10-29, claude-opus-5-5 (effort high, claude-code_2-1-312_agent)] CURATED …`).
+7. **Commit**, after the go: `uv run database-batch <batch> --author "$(cat <batch>/author.txt)" --commit` writes the new descriptions, the publication states and notes, each note after its date and the author recorded at the start (`[2026-10-29, claude-opus-5-5 (effort high, claude-code_2-1-312_agent, commit 3f06368)] CURATED …`).
 
 ## Browser
 
