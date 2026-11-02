@@ -1,16 +1,32 @@
 """Convert full texts and supplementary files to the texts a curation reads, short in tokens.
 
-uv run curation-parse <dir> <file>...
+    uv run curation-parse <dir> <file>...
 
-PMC XML, HTML (a PMC article page by its structure, as its XML) and Word documents (.docx,
-and .doc through our own reader) become Markdown, `<file>.md`; a PDF its plain text page by
-page, a table's row on one line when the PDF writes it cell after cell, `<file>.txt`; a
-spreadsheet one TSV file per sheet, `<file>.<n>.tsv` in workbook order, every row as wide as
-its widest.
-CSV, TSV and plain text are their own text, cleaned in place: in UTF-8, invisible characters
-removed, a CSV's or TSV's rows padded as a sheet's. The texts are written beside the file,
-named by their format; the converter is chosen by the file type; no network. Prints each
-file's entry of the manifest (`curation-fetch`), its paths relative to `<dir>`.
+Converts each file, a path relative to `<dir>` (the publication directory), by its type, to texts
+written beside it and named by their format. No network.
+
+- Markdown, `<file>.md`: PMC XML (title, abstract, sections, captions, tables and supplementary
+  materials; references, acknowledgements, notes and peer reviews left out), a PMC article page
+  by its structure, as its XML (the same blocks, the back matter left out), any other HTML page
+  (its main text), a Word document (`.docx`, or `.doc` from Word 97-2003, through our own
+  reader).
+- Plain text, `<file>.txt`: a PDF's text page by page (`--- page N ---`), line by line in the
+  order pymupdf reads it, nothing moved; a line read right after another at the same height
+  continues it after a tab, so a table's row the PDF writes cell after cell is one line, while a
+  cell shared by several rows stays on its own lines.
+- TSV, one file per sheet of a spreadsheet (`.xlsx`, `.xlsm`, `.xls`): `<file>.<n>.tsv`, numbered
+  in workbook order, an empty sheet an empty file; its empty rows left out, every other row as
+  many fields as the sheet's widest row.
+- CSV, TSV and plain text are their own text, cleaned in place: in UTF-8 (their encoding found
+  among UTF-8, UTF-16, Windows-1252 and Mac Roman), invisible characters removed, and a CSV's or
+  TSV's rows padded as a sheet's (a TSV split at its tabs; a CSV read as CSV, its separator the
+  one, among comma, semicolon and tab, that gives the most rows the same number of fields); a file
+  whose encoding is not found is refused.
+
+Prints each file's entry of the manifest (`fetch.py`), one JSON line, paths relative to `<dir>`:
+`file`, then `text` and `bytes`, or `sheets`, each with `sheet`, `text` and `bytes`. A scanned
+PDF, a damaged file, an image or any other type is refused with the reason, and nothing is written
+for it.
 """
 
 import argparse
@@ -828,7 +844,9 @@ def convert(base: Path, file: str) -> dict[str, Any]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Convert full texts or supplements to text.")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("dir", type=Path)
     parser.add_argument("files", nargs="+", metavar="file")
     args = parser.parse_args()

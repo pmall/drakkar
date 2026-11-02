@@ -1,33 +1,59 @@
 """Download the full text of a publication, as published, with its supplementary files, and
 convert them to text for the curation; or one file, at a URL.
 
-uv run curation-fetch <dir> <pmid>
-uv run curation-download <dir> <url>...
+    uv run curation-fetch <dir> <pmid>
+    uv run curation-download <dir> <url>...
 
-Three steps, each a list of routes; a route answers yes or no by one test.
-1. Access: the article is free when it has a PMCID, when OpenAlex or Unpaywall list a free copy
-   (never a preprint), or when the publisher's page declares free access (a Creative Commons
-   license among the declarations); closed otherwise.
-2. The article, one file, from the first route that gives it: the PMC open access files,
-   Europe PMC `fullTextXML` and NCBI `efetch` (each when its XML has a body), the PMC article
-   page (when it has the body sections), the publisher's HTML page (when it declares free
-   access), then, last, the publisher's PDF (`citation_pdf_url`) and the other free copies'
-   PDFs (when the file is a PDF).
-3. The supplementary files the article lists (its XML, or the supplementary links of its
-   page), each looked for on every route that serves one, whatever route gave the article: the
-   PMC open access files, the link the article gives, the publisher's page, then Europe PMC's
-   supplementary files service. Videos, the Reporting Summary and the peer review file are
-   skipped. The article's figures, the other images of the PMC open access files, are saved
-   too.
-A TIFF or a BMP image is saved as PNG, one per image it holds, which the Read tool reads. Each
-file but an image is converted as `curation-parse` does, its texts beside it, named by their
-format. Last, the manifest `manifest.json` lists the files the curation can use, each with its
-texts and their sizes, written only when the article could be converted. Prints the report: a
-line saying where the article comes from, or why there is none, then what could not be had.
+`curation-fetch` downloads the full text in three steps. Each step is a list of routes, each route
+answering yes or no by one test.
 
-`curation-download` saves the file at a URL, unpacks an archive (its videos left out), converts
-each file but an image, and prints one line per file: its entry, as in the manifest, or why it
-could not be had.
+1. Access: the article is free when it has a PMCID, when OpenAlex or Unpaywall list a free copy,
+   or when the publisher's page (at the DOI) declares free access (`"isAccessibleForFree": true`,
+   `<meta name="access" content="Yes">`, `citation_fulltext_world_readable`, or a link to the
+   article's Creative Commons license, PLOS's only declaration); a declared paywall wins. Closed
+   otherwise. A preprint is never a copy of the article: its copies, its DOI and a PMC copy of it
+   (known by its own DOI) are never fetched.
+2. The article, one file, from the first route that gives it: the PMC open access files, Europe
+   PMC `fullTextXML`, NCBI `efetch` (each when its XML has a body); the PMC article page, which
+   serves the PMC copies outside the open access files (when it has the body sections; one page
+   per publication, as NCBI forbids bulk downloads); the publisher's HTML page (when it declares
+   free access; a page that declares a paywall is never the article); then, last, the publisher's
+   PDF (`citation_pdf_url`) and the other free copies' PDFs (when the file is a PDF).
+3. The supplementary files, as the article lists them: its XML, the supplementary sections of the
+   PMC page, or else the supplementary links of the publisher's page. Each is looked for on every
+   route that serves one, whatever route gave the article: the PMC open access files, the link
+   the article gives (never the PMC website's, which is behind a challenge), the publisher's page,
+   then Europe PMC's supplementary files service. Archives are unpacked. A video, the Reporting
+   Summary and the peer review file (both by their caption) are skipped.
+
+It writes the article, `<pmid>.xml`, `<pmid>.html` or `<pmid>.pdf`, the supplementary files in
+`<pmid>.supp/`, and the article's figures, the other images of the PMC open access files, in
+`<pmid>.fig/`. A TIFF or a BMP image is saved as PNG, one file per image it holds
+(`<name>-<n>.png` when several), which the Read tool reads. Each file but an image is converted
+as `curation-parse` does (`parse.py`), its texts beside it; an image is read as it is.
+
+Last, only when the article could be converted, the manifest `manifest.json`, the files the
+curation can use: `article`, with `file`, the original, `text`, its text, and `bytes`, the size
+of the text; `supplements`, each with the `name` the article gives it, `file`, then `text` and
+`bytes`, or for a spreadsheet `sheets`, each with `sheet`, its name, `text` and `bytes` (an image:
+`name` and `file`); `figures`, the paths of the figures. Paths are relative to `<dir>`. A
+publication directory set up from files the user provides holds the same: each file converted
+with `curation-parse`, which prints its entry, and the manifest in this format, `bytes` optional.
+
+It prints its report. First a line saying where the article comes from: `Full text: <PMCID>
+(<license>)` or `Full text: <source> (<license>, <URL>)`, ending with `, supplementary files
+missing: <names>` when some are; without the article, `Full text: closed — <why>`, or `Full text:
+not downloaded — <why>` when it is free but no copy could be downloaded, then every route tried
+with its outcome. Then one line per file that could not be converted, with why, and per
+supplementary file missing, with every place tried.
+
+`curation-download` saves the file at each URL (a supplementary file the article links to, a
+commercial construct's page or datasheet) in `<dir>` (the type from the response when its name
+gives none), an archive unpacked (its videos left out), each file but an image converted beside
+it, as `curation-parse` does; a TIFF or a BMP image saved as PNG. Under a `#` header, one line per
+file, starting with its URL: its entry, as in the manifest, in JSON, its paths starting with
+`<dir>` (an image: `file` alone), or why it could not be had (the HTTP outcome, not converted). It
+ignores an option it does not define, never refuses it.
 
 Configuration, in the project's `.env`: `UNPAYWALL_EMAIL`, the address Unpaywall asks for to
 answer a request. Without it Unpaywall is not asked at all.
@@ -92,7 +118,7 @@ PREPRINT_HOSTS = (
     "arxiv.org",
 )
 PREPRINT_DOIS = ("10.1101/", "10.64898/", "10.21203/", "10.20944/", "10.2139/", "10.48550/")
-# PMC copies are fetched by their PMCID (routes of step 2), never as an open access location.
+# PMC copies are fetched by their PMCID (routes of the article), never as an open access location.
 PMC_HOSTS = ("ncbi.nlm.nih.gov", "europepmc.org")
 # Services, not copies: a failure there says nothing of where the article is blocked.
 SERVICES = (PMC_AWS, EUROPE_PMC, EFETCH)
@@ -557,7 +583,7 @@ class Fetch:
                 return location
         return {}
 
-    # Step 1: access
+    # Access
 
     def free(self) -> bool:
         return bool(
@@ -571,7 +597,7 @@ class Fetch:
             return "open access only as a preprint"
         return "not open access anywhere"
 
-    # Step 2: the article
+    # The article
 
     def article_routes(self) -> Iterator[Callable[[], bool]]:
         for pmcid in self.pmcids:
@@ -600,7 +626,7 @@ class Fetch:
 
     def pmc_listing(self, pmcid: str) -> str | None:
         """The latest version of a PMC copy in the open access files (`PMC123.2` after
-        `PMC123.1`), its files kept as a route of step 3."""
+        `PMC123.1`), its files kept as a route of the supplementary files."""
         listing = self._try(f"{PMC_AWS}/?list-type=2&prefix={pmcid}.")
         keys = re.findall(r"<Key>([^<]+)</Key>", listing.body.decode(errors="replace"))
         if not keys:
@@ -684,7 +710,7 @@ class Fetch:
         self.listed = supplements
         self.report["supplements_from"] = source
 
-    # Step 3: the supplementary files
+    # The supplementary files
 
     def supplement_routes(self, item: Supplement) -> Iterator[str]:
         """The URLs that may serve a file, in order; Europe PMC's archive comes after them all."""
@@ -935,7 +961,9 @@ def parse_args(parser: argparse.ArgumentParser) -> argparse.Namespace:
 
 
 def download_main() -> None:
-    parser = argparse.ArgumentParser(description="Download files and convert them to text.")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("dir", type=Path)
     parser.add_argument("urls", nargs="+")
     args = parse_args(parser)
@@ -944,7 +972,9 @@ def download_main() -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Download the full text of a publication.")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("dir", type=Path)
     parser.add_argument("pmid", type=int)
     args = parser.parse_args()

@@ -10,7 +10,8 @@ The occurrences follow fixed rules, so a mapping on given sequences always gets 
 1. Exact matches come first: if the mapping is found exactly on an isoform, its occurrences are
    the exact matches, on every isoform that has one.
 2. Otherwise the mapping is aligned on each isoform (BLOSUM62, gaps -10/-2, the protein free
-   beyond both ends of the mapping). The isoforms that reach the best score keep every placement
+   beyond both ends of the mapping; an arbitrary choice: a mapping is right by its sequence, not
+   by this alignment). The isoforms that reach the best score keep every placement
    of their optimal alignments, each with the highest identity among its alignments.
 3. On each isoform, overlapping placements form one cluster (chains included), which keeps its
    first placement: the smallest start, then the smallest stop.

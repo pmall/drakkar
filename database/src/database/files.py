@@ -1,19 +1,64 @@
-"""The files of a pass (`docs/tools.md`) and the commands that write them.
-
-Every file is JSON Lines: one object per line, its keys those of its format (`ADD`, `REVISE`,
-`PUBLICATIONS`), its values in JSON types; no header, and blank lines are skipped, so files
-concatenate.
+r"""The files of a pass, and the commands that write them to Drakkar or diff them against it.
 
     uv run database-add <file>... [--commit]
     uv run database-revise <file>... [--commit]
     uv run database-publications <file>... [--author <name>] [--commit]
-    uv run database-diff <pmid> <file>
     uv run database-batch <dir> [--author <name>] [--commit]
+    uv run database-diff <pmid> <file>
 
-Without `--commit`, a dry run: everything is applied and checked, then rolled back. `--author`
-names the author of the publication notes, written after their date. The diff is
-read-only: it writes the add, revise and delete files of a curated publication beside its file.
-The batch writes the files of a directory in one transaction.
+Descriptions and publication states are written only through these commands, from files. Without
+`--commit`, a command is a dry run: it applies its files, checks every invariant on the whole
+database in the same transaction, prints the result, and rolls back. With `--commit`, it commits
+only if nothing is refused and the check finds no error (`write.py`). Refused rows are reported
+with their file and line.
+
+- `database-add`: adds descriptions.
+- `database-revise`: revisions and removals, checked on the result of all the rows, so a change
+  that passes through an inconsistent state is fine (a rename carried by several descriptions, a
+  fix plus a merge).
+- `database-publications`: publication states and notes. `--author` names the author of the
+  notes.
+- `database-batch`: writes a batch from the files of its directory: `descriptions.jsonl`, the
+  descriptions to add; `descriptions.add.jsonl`, `descriptions.revise.jsonl` and
+  `descriptions.delete.jsonl`, the files `database-diff` writes beside a `descriptions.jsonl`,
+  the first read in place of `descriptions.jsonl` when it is there; and `publications.jsonl`. A
+  missing descriptions file has no rows. One transaction, in this order: the revisions and
+  removals, the new descriptions, the publication states and notes, `--author` as in
+  `database-publications`. Every invariant is checked once, on the result, so a row can rely on
+  an earlier one (an addition on a rename).
+- `database-diff`: read-only. Diffs the descriptions of the file (descriptions to add, all of one
+  publication) against the live descriptions of that publication in its vh run (`diff.py`), and
+  writes beside the file what writing it would change: `<name>.add.jsonl`, the descriptions to
+  add; `<name>.revise.jsonl`, the descriptions to revise, as `revise` rows;
+  `<name>.delete.jsonl`, the descriptions to remove, as `remove` rows.
+
+The files are JSON Lines: one JSON object per line, with every key of its format and no other
+(`ADD`, `REVISE`, `PUBLICATIONS`), its values in JSON types. No header: an empty file has no row,
+and a blank line is skipped. Every row names its publication by its PMID: a file holds one
+publication or many, and files concatenate with `cat`. In a value, JSON escapes only `"` (`\"`),
+`\` (`\\`) and line breaks (`\n`). A line with a missing or unknown key, or a value of the wrong
+type, is refused with its file and line. The notes follow `docs/database.md#notes`.
+
+Each row is an object of `write.py`, its keys its fields, those of its `Description` in line:
+`method`, `accession1`, `accession2`, `start2` and `stop2` (numbers, or null for the full
+protein), `name2`, `mappings1` and `mappings2` (lists of mapping sequences).
+
+Descriptions to add (`*.jsonl`), one line per new description, a `NewDescription`: `pmid` (a
+number), the keys of its `Description`, `note`. One line, wrapped here:
+
+    {"pmid": 35939498, "method": "MI:0007", "accession1": "Q13501", "accession2": "P29990",
+    "start2": null, "stop2": null, "name2": "C", "mappings1": [], "mappings2": ["mSTNPK"],
+    "note": "..."}
+
+Revisions (`*.revise.jsonl`, `*.delete.jsonl`), one line per revised or removed description, a
+`Revision`: `stable_id`, `version` (a number), `pmid` (a number), `action` (`revise` or
+`remove`), `into` (a stable ID, or null), the keys of its `Description` (null on a `remove`,
+unless it gives what a merged duplicate was decided to become), `note`.
+
+Publications (`*.jsonl`), one line per publication whose state or note changes, a
+`PublicationUpdate`: `pmid` (a number), `state` (`selected` or `curated`), `note`.
+
+    {"pmid": 35939498, "state": "curated", "note": "CURATED ..."}
 """
 
 import argparse
@@ -274,23 +319,22 @@ def report(outcome: Outcome, wheres: Sequence[str]) -> str:
 
 
 def _author_option(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        "--author", default="", help="the author of the publication notes, after their date"
-    )
+    parser.add_argument("--author", default="")
 
 
 def _command(
-    description: str,
     read: Callable[[Sequence[Path]], list[tuple[str, Any]]],
     write: Callable[..., Outcome],
     author: bool = False,
 ) -> None:
     """A write command on files; with `author`, it takes `--author` for the publication notes."""
-    parser = argparse.ArgumentParser(description=description)
-    parser.add_argument("files", type=Path, nargs="*", help="files of the format of docs/tools.md")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument("files", type=Path, nargs="*")
     if author:
         _author_option(parser)
-    parser.add_argument("--commit", action="store_true", help="commit if everything passes")
+    parser.add_argument("--commit", action="store_true")
     args = parser.parse_args()
     options = {"author": args.author} if author else {}
     try:
@@ -304,27 +348,24 @@ def _command(
 
 
 def add_main() -> None:
-    _command("Add new descriptions.", read_descriptions, add_descriptions)
+    _command(read_descriptions, add_descriptions)
 
 
 def revise_main() -> None:
-    _command("Revise or remove live descriptions.", read_revisions, revise_descriptions)
+    _command(read_revisions, revise_descriptions)
 
 
 def publications_main() -> None:
-    _command(
-        "Set the state and note of publications.", read_publications, update_publications, True
-    )
+    _command(read_publications, update_publications, True)
 
 
 def batch_main() -> None:
     parser = argparse.ArgumentParser(
-        description="Write the files of a directory in one transaction: revisions, descriptions "
-        "and publications."
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("dir", type=Path, help="the directory of the files")
+    parser.add_argument("dir", type=Path)
     _author_option(parser)
-    parser.add_argument("--commit", action="store_true", help="commit if everything passes")
+    parser.add_argument("--commit", action="store_true")
     args = parser.parse_args()
     directory = cast(Path, args.dir)
 
@@ -353,10 +394,10 @@ def batch_main() -> None:
 
 def diff_main() -> None:
     parser = argparse.ArgumentParser(
-        description="Diff the curated descriptions of a publication against its live ones."
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("pmid", type=int)
-    parser.add_argument("file", type=Path, help="the publication's descriptions, JSON Lines")
+    parser.add_argument("file", type=Path)
     args = parser.parse_args()
     path = cast(Path, args.file)
     try:

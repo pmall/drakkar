@@ -1,14 +1,8 @@
 # Generic viral proteins
 
-The species and the generic viral proteins of the vh descriptions dataset: one virus is one species, one viral protein is one node of the interaction graph ([`docs/datasets.md`](../docs/datasets.md#generic-viral-proteins)).
+The species and the generic viral proteins of the vh descriptions dataset: one virus is one species, one viral protein is one node of the interaction graph ([`docs/datasets.md`](../docs/datasets.md#generic)).
 
-| File | What it holds |
-| -- | -- |
-| [`species.tsv`](species.tsv) | The NCBI taxa each treated as one virus, with their family, our name for the virus and their publications. |
-| [`placed.tsv`](placed.tsv) | The taxa placed by hand, with their subtree, in the species their virus is. |
-| [`proteins.tsv`](proteins.tsv) | Each generic name of a species, the label of the protein it is shown as, and a note where the decision is not obvious. |
-
-The species of a viral interactor is given by the deepest taxon at or above its taxon in `species.tsv` or `placed.tsv`. Before each export, the skill [`export`](../skills/export/SKILL.md) brings the files in step with Drakkar with `uv run database-generic sync database/generic/` ([`docs/tools.md`](../docs/tools.md#generic-viral-proteins)) and decides what is new. This file says why the species are what they are.
+The files, their columns and how a viral interactor finds its species are in [`generic.py`](../src/database/generic.py); before each export, the skill [`export`](../skills/export/SKILL.md) brings them in step with Drakkar and decides what is new. This file says why the species are what they are.
 
 Names, ours: they are what the datasets show, and the NCBI scientific names are often ICTV binomials no reader uses (*Lymphocryptovirus humangamma4* is Epstein-Barr virus, *Orthoflavivirus zikaense* is Zika virus). Two species are in no NCBI family: Bacillus phage PBS2 and Clostridium botulinum D phage (unclassified *Caudoviricetes*).
 

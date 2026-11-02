@@ -1,28 +1,35 @@
 """The generic viral proteins of the vh descriptions dataset: the files of their directory kept in
 step with Drakkar (read-only on the database).
 
-uv run database-generic sync <dir>    refresh <dir>/species.tsv and <dir>/proteins.tsv
+    uv run database-generic sync <dir>
 
-The files, tab-separated under a header line:
+The vh descriptions dataset is `descriptions_vh` (`export.py`). Its generic viral proteins are
+three files, versioned in git in `database/generic/`, tab-separated under a header
+line:
 
-- `species.tsv`: the NCBI taxa each treated as one virus, the species. A person writes
-  `ncbi_taxon_id` and `name`; `sync` fills `family_ncbi_taxon_id` (empty when the NCBI taxonomy
-  places the taxon in no family) and `publications`, the publications of its live vh
-  descriptions.
-- `placed.tsv`: `ncbi_taxon_id`, `species_ncbi_taxon_id`, `name`: the taxa of viral interactors
-  placed in their species by a person: a taxon the NCBI taxonomy has no row for, or one it keeps
-  outside the species its virus is (an old species beside its successor, an unclassified
-  taxon).
+- `species.tsv`: `family_ncbi_taxon_id` (empty when the NCBI taxonomy places the taxon in no
+  family), `ncbi_taxon_id`, `name` (the virus name readers use, not the NCBI binomial),
+  `publications` (the publications of its live vh descriptions): the NCBI taxa each treated as one
+  virus, the species, one line each, sorted by family, then species (a species in no family
+  last). A person writes `ncbi_taxon_id` and `name`; `sync` fills the others.
+- `placed.tsv`: `ncbi_taxon_id`, `species_ncbi_taxon_id`, `name`: a taxon of viral interactors
+  placed in its species by a person, with its subtree: one missing from the NCBI taxonomy, or one
+  the taxonomy keeps outside the species its virus is (an old species beside its successor, an
+  unclassified taxon of a known virus); sorted by species, then taxon.
 - `proteins.tsv`: `ncbi_taxon_id` (the species), `generic_name`, `protein`, `note`: one line per
-  generic name of the vh descriptions dataset in its species, `protein` the label of the generic
-  viral protein it is shown as, `note` why, when it is not obvious. `sync` adds the new names
-  with an empty `protein`, for a person to decide, and removes the names the dataset no longer
-  has.
+  generic name of the dataset in its species, `protein` the label of the generic viral protein it
+  is shown as, `note` why, when it is not obvious; sorted as `species.tsv`, then by name.
 
-The vh descriptions dataset: the live vh descriptions whose human interactor is on its current
-snapshot, in Swiss-Prot, the viral interactor on any snapshot. The species of a viral interactor
-is given by the deepest taxon at or above its taxon in `species.tsv` (that taxon) or
-`placed.tsv` (the species it is placed in).
+The species of a viral interactor is given by the deepest taxon at or above its taxon in
+`species.tsv` (that taxon) or `placed.tsv` (the species it is placed in).
+
+`sync` rewrites the three files of the directory, sorted, and from Drakkar the families and
+publications of `species.tsv` and the names of `proteins.tsv`: the names the dataset no longer
+has are removed, the new ones added with an empty `protein`. It prints the counts, the names
+removed, then what a person decides, or `nothing`: a species missing from the NCBI taxonomy; a
+placed taxon now under its species in it (its line can go); a taxon under no species, with its
+lineage and its names; a name with no protein; a name whose protein is a name of the species
+mapped to another protein. A file whose header is not its format is refused.
 """
 
 import argparse
@@ -283,10 +290,12 @@ def sync(cur: Any, directory: Path) -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="The generic viral proteins, kept in step.")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     commands = parser.add_subparsers(dest="command", required=True)
-    s = commands.add_parser("sync", help="refresh species.tsv and proteins.tsv from Drakkar")
-    s.add_argument("directory", type=Path, help="the directory of the files (generic/)")
+    s = commands.add_parser("sync")
+    s.add_argument("directory", type=Path)
     args = parser.parse_args()
     with connect(readonly=True) as conn, conn.cursor() as cur:
         cur.execute("SET statement_timeout = '30s'")

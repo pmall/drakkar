@@ -8,7 +8,7 @@ description: "The derived datasets exported from Drakkar: the run cut agreed wit
 
 The derived datasets are files for other applications, exported from the live descriptions: the hh and vh descriptions, the sequences of the viral interactors, the human and viral mappings. The vh descriptions show each interaction as one human Swiss-Prot entry × one generic viral protein: one node of an interaction graph, one name in a species, from the files of `database/generic/`, which you bring in step with Drakkar before each export. Read no doc: this skill is the whole process. You write only the files of `database/generic/` and the export, never the database.
 
-## 1. The run cut
+## The run cut
 
 The export takes the vh runs up to a run, given by its ID (`runs.id`), never its name, and the special runs (`special-<n>`), all of them unless the user cuts them too; hh is always whole. Take the cut from the user's request; otherwise show the vh runs still being curated, with their publications neither curated nor discarded, and agree the cut with the user before going on:
 
@@ -18,7 +18,7 @@ uv run database-read sql "SELECT r.id, r.name, count(*) AS publications FROM run
 
 When the user asks only to update the generic viral proteins, skip this step and stop after the next one.
 
-## 2. The generic viral proteins
+## The generic viral proteins
 
 The files of `database/generic/`, tab-separated under a header line:
 
@@ -55,10 +55,10 @@ The species of a viral interactor is given by the deepest taxon at or above its 
 
 4. **`protein named elsewhere`**: a name's protein is a name of the species mapped to another protein; make the group's lines agree.
 
-## 3. The export
+## The export
 
 `uv run database-export database/generic/ <workdir>/exports/ --run <id>`, with `--special-run <id>` when the user cuts the special runs. Read-only on the database, it refuses to write anything while `database/generic/` is not in step. It writes five datasets, each as a `.tsv` and an `.xlsx` file named after the cut run (`descriptions_vh_run87.tsv`): `descriptions_hh`, `descriptions_vh`, `interactors_viral` (the sequence of each viral interactor), `mappings_h` and `mappings_v`; it prints the runs exported and the lines of each, then checks the files, read back, against each other and against the database: the numbers (live descriptions = exported + left out, a human interactor not up to date; mappings = lines + merged in homodimers), then `ok` or the failures, with an error.
 
-## 4. Reply
+## Reply
 
 The generic viral proteins: what `sync` reported (counts, names removed); the species added or placed, and why; the names given another name's protein (`name → protein`, with their descriptions). Then the export: the run cut (name and ID), the special runs, the lines of each dataset, the numbers of the check and its result, and the directory. A failed check is the first thing said, with its failures. The user reviews `git diff database/generic/`; when a decision there changes, export again. Commit only on the user's request.

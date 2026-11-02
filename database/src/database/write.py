@@ -1,4 +1,4 @@
-"""Write descriptions and publication states (`docs/tools.md`).
+"""Write descriptions and publication states, for the write commands (`files.py`).
 
 Three functions, one per kind of write: `add_descriptions`, `revise_descriptions`,
 `update_publications`; `write_batch` runs the three together.
@@ -10,13 +10,11 @@ Each writes its lists in one transaction:
 3. the transaction is committed only with `commit=True`, no row problem and no error. Otherwise
    it is rolled back: a dry run is the same code as a commit.
 
-Rows are checked only for what they build on: the publication, the snapshots, the method, the
-coordinates, the mappings; never the note. What involves other descriptions (duplicates, generic
-names) is left to the full check, on the result of the whole list: a rename carried by several
-descriptions passes through inconsistent states and is valid at the end.
-
-A description note carries no date (its version has `created_at`); a publication note keeps the
-notes of its passes, the newest first, each after its date and, when given, its author.
+Rows are checked only for what they build on: a `selected` or `curated` publication, the
+snapshots, the method, the coordinates, the mappings; never the note. What involves other
+descriptions (duplicates, generic names) is left to the full check, on the result of the whole
+list: a rename carried by several descriptions passes through inconsistent states and is valid at
+the end.
 """
 
 import json
@@ -41,9 +39,10 @@ class InvalidRow(ValueError):
 class Description:
     """What a curator decides for one description.
 
-    `accession2` is viral in vh, human in hh. `start2`/`stop2` default to the full protein; a
-    mature protein gets its coordinates. `name2` is the generic name of a viral interactor (in
-    hh, the gene name, derived). Human names and coordinates are derived from the snapshots.
+    `accession1` is the human interactor, `accession2` the viral one in vh, human in hh.
+    `start2`/`stop2` default to the full protein; a mature protein gets its coordinates. `name2`
+    is the generic name of a viral interactor (in hh, the gene name, derived). Human names and
+    coordinates are derived from the snapshots.
     Mappings are the sequences the experiment used, their extra end residues in lowercase
     (`database.align`); their occurrences are computed by `map_sequence`, and a mapping whose best
     identity is below `MIN_IDENTITY` is skipped.
@@ -70,10 +69,13 @@ class NewDescription:
 
 @dataclass(frozen=True)
 class Revision:
-    """A decision on the live `version` of a description.
+    """A decision on the live `version` of a description, refused if that version is no longer
+    live.
 
-    `revise`: a new version holding `description`, with its note. `remove`: no successor, the
-    `REMOVED` line added to the note of the live version.
+    `revise`: a new version, `version` + 1, holding `description`, with its note; it keeps the
+    snapshots of the description, even obsolete, except on a side whose accession changes. A
+    revision that changes nothing is refused, unless it changes only skipped mappings: it is then
+    skipped. `remove`: no successor, the `REMOVED` line added to the note of the live version.
     With `into`, the removed description is a duplicate merged into that survivor: as it is, or
     as `description` when it was decided to become the survivor, it has the same publication,
     method and interactors, and the survivor holds all its mapping sequences.

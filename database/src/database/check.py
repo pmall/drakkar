@@ -1,8 +1,11 @@
-"""Check the Drakkar invariants (`docs/database.md` §4) on vh and hh data, without writing.
+"""Check the Drakkar invariants (`docs/database.md#invariants`) on vh and hh data, without writing.
+
+    uv run database-check <dir>
 
 Each invariant is a query returning its violations, one row per violation, with the stable ID and
-PMID when relevant. The report is a Markdown summary plus one TSV file per violated invariant.
-The exit code is 1 if any error is found.
+PMID when relevant. The report, written to the directory (`<workdir>/<release>/reports/check`,
+say), is a Markdown summary, `check.md`, plus one TSV file per violated invariant,
+`<invariant>.tsv`. The exit code is 1 if any error is found.
 """
 
 import argparse
@@ -484,7 +487,8 @@ def check_d11(cur: Any) -> Rows:
     """Mapping structure: the shape and the types of the JSON, not its content.
 
     Every version is checked, live or deleted: a structure problem is fixed in place, without a
-    revision, in all the rows that have it (`docs/database.md` §2). One row per version side.
+    revision, in all the rows that have it (`docs/database.md#versioning`). One
+    row per version side.
     """
     cur.execute("""
         SELECT v.run_type, v.stable_id, v.version, v.deleted_at IS NULL, v.pmid,
@@ -659,7 +663,9 @@ def run(output: Path) -> int:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Check the Drakkar invariants, read-only.")
-    parser.add_argument("output", type=Path, help="e.g. <workdir>/2026_03/reports/check")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument("output", type=Path)
     args = parser.parse_args()
     sys.exit(run(args.output))

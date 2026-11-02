@@ -20,7 +20,7 @@ A publication is curated from its full text, with its supplementary files. What 
 
 A supplementary file is relevant when it can hold interactions. Irrelevant, for instance: a video, a reporting summary, a peer review file, a checklist, a figure of non-interaction data, a file of raw source data whose values are already in a table that was read. A file that could not be read — not fetched, held by no copy, failed to convert — is judged relevant or not by what the text, its caption or its name show: a table of hits, a figure of an interaction experiment, data the text cites for an interaction.
 
-A missing supplementary file is one the text cites and the files at hand lack. When it is relevant and the text gives its URL, it is downloaded before the curation is written. A relevant file that could not be had leaves the publication selected rather than curated, with the reason in its note (the Drakkar database's `database.md`, states).
+A missing supplementary file is one the text cites and the files at hand lack. When it is relevant and the text gives its URL, it is downloaded before the curation is written. A relevant file that could not be had leaves the publication selected rather than curated, with the reason in its note (the Drakkar database's `database.md#states`).
 
 ## The experiment
 
@@ -87,7 +87,7 @@ Coordinates tiers:
 4. `GenBank`: when the entry's GenBank or RefSeq record has a mature peptide feature for the mature protein, that feature.
 5. `best-effort`: in any other case, any way possible, for instance the chain of another strain's entry, carried over by alignment.
 
-## The mapping
+## The mapping <a id="mapping"></a>
 
 The interactor is identified first — the whole protein, or the mature protein the mapping belongs to — then the mapping within it: the part of the interactor the bait or prey construct carried.
 

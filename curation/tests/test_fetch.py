@@ -108,7 +108,7 @@ def outcomes(report: dict[str, Any]) -> dict[str, str]:
     return {t["url"]: t["outcome"] for t in report["tried"]}
 
 
-# Step 2: the article
+# The article
 
 
 def test_pmc_open_access_files(tmp_path: Path):
@@ -412,7 +412,7 @@ def test_supplement_known_as_an_image_only_once_downloaded(tmp_path: Path):
     assert report["missing_supplements"] == []
 
 
-# Step 1: access, and the outcome without an article
+# Access, and the outcome without an article
 
 
 def test_closed(tmp_path: Path):

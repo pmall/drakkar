@@ -8,14 +8,14 @@ One meaning per word, used everywhere: docs, code, reports and conversations. Wh
 | -- | -- |
 | Publication | A PubMed record, identified by its PMID (`publications`). Never "paper". |
 | Run | The PMIDs returned by one PubMed query (`runs`), of type vh or hh. Named by a number: "run 74" is its `name`, never its `id`. |
-| Special run | A vh run holding the publications the AI curation could not curate fully (`selected` with a pass date), moved there from their runs (`database.md` §1, states). Named `special-1`, `special-2`…; the highest is the open one. |
+| Special run | A vh run holding the publications the AI curation could not curate fully (`selected` with a pass date), moved there from their runs (`database.md#states`). Named `special-1`, `special-2`…; the highest is the open one. |
 | vh, hh | Virus–human and human–human. A vh run looks for virus–human interactions, an hh run for human–human ones. hh gets no new curation, but its descriptions follow the invariants and the UniProt upgrades like vh ones. |
 | Association | A publication in a run (`associations`). It carries the state and the note. A publication can be in a vh run and an hh run: two associations. |
 | State | The curation state of an association: `pending` (not pre-curated), `selected` (kept at pre-curation, curation in progress), `discarded` (rejected at pre-curation), `curated` (all its relevant files explored and all its descriptions extracted; with or without descriptions). |
 | Pre-curation | The decision `selected` or `discarded`, from the title and abstract. |
-| Curation pass | Reading the relevant files of a selected publication (its full text and supplementary files) and recording its descriptions. Ends with the state `curated` when the curation could explore all of them and extracted all the descriptions; with a relevant file missing, `selected` with a date (`database.md` §1, states). The last AI curation pass is dated by `associations.ai_pass_at`. |
+| Curation pass | Reading the relevant files of a selected publication (its full text and supplementary files) and recording its descriptions. Ends with the state `curated` when the curation could explore all of them and extracted all the descriptions; with a relevant file missing, `selected` with a date (`database.md#states`). The last AI curation pass is dated by `associations.ai_pass_at`. |
 | Manual pass | The curation of a publication the AI curation could not curate fully (`selected` with a pass date), in a special run: by hand, or by an agent from a curator file, an Excel file describing its interactions. |
-| Note | The free text of an association (`associations.annotation`), the publication note: decisions about the publication (`database.md` §1, notes). It never holds maintenance information. |
+| Note | The free text of an association (`associations.annotation`), the publication note: decisions about the publication (`database.md#notes`). It never holds maintenance information. |
 
 ## Proteins
 
@@ -57,7 +57,7 @@ One meaning per word, used everywhere: docs, code, reports and conversations. Wh
 | Live | The version of a description that is in use (`deleted_at` null). At most one per stable ID. |
 | Revision | Writing a new version of a description: the live version is deleted and the new one created at the same instant. |
 | Deleted version | A version with `deleted_at` set. It never counts: not in the datasets, not in the checks of live data. |
-| Description note | The free text of a description version (`descriptions.annotation`): the curation's decisions on that version (`database.md` §1, notes). |
+| Description note | The free text of a description version (`descriptions.annotation`): the curation's decisions on that version (`database.md#notes`). |
 | Removed description | A stable ID whose last version is deleted, with no successor. Nothing is ever physically deleted. |
 | Obsolete interactor | An interactor that points to an obsolete snapshot. Interactors go obsolete, not descriptions. |
 | Obsolete description | A live description with at least one obsolete interactor. Not the same as deleted: an obsolete description is live and counts (its mappings feed the mappings dataset when its human target is up to date). |
@@ -66,10 +66,10 @@ One meaning per word, used everywhere: docs, code, reports and conversations. Wh
 
 | Term | Meaning |
 | -- | -- |
-| Invariant | A rule the data must follow, with an ID (`database.md` §4). It is checked against the snapshots a description points to, whether current or obsolete. |
+| Invariant | A rule the data must follow, with an ID (`database.md#invariants`). It is checked against the snapshots a description points to, whether current or obsolete. |
 | Violation | A row that breaks an invariant, as reported by `database-check`. |
-| Fix | The correction of an error found in the data, outside the regular process: a revision decided with the user (`database.md` §2). A malformed mapping is corrected in place, without a revision. |
+| Fix | The correction of an error found in the data, outside the regular process: a revision decided with the user (`database.md#versioning`). A malformed mapping is corrected in place, without a revision. |
 | Upgrade job | Loading a new UniProt release and moving the obsolete interactors to current snapshots. |
 | Versioning pass | The part of the upgrade job that moves the obsolete interactors of live descriptions to current snapshots, protein by protein. |
 | Put aside | An obsolete interactor left on its old snapshot by a versioning pass because it needs a curation decision, with its reason. |
-| Derived dataset | A dataset exported from Drakkar for other applications, built from live descriptions only (`datasets.md`). |
+| Derived dataset | A dataset exported from Drakkar for other applications, built from live descriptions only (`database/src/database/export.py`). |

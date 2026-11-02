@@ -31,9 +31,9 @@ def read_notes(directory: Path) -> list[dict[str, int | str]]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Write the publications file of a curation batch from its publication notes."
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("dir", type=Path, help="the batch directory, one directory per PMID")
+    parser.add_argument("dir", type=Path)
     args = parser.parse_args()
     directory = cast(Path, args.dir)
     rows = read_notes(directory)

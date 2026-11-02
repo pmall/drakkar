@@ -1,11 +1,17 @@
-"""Load or update the NCBI taxonomy (`taxon`, `taxon_name`) from `<workdir>/<release>/taxonomy/`.
+"""Load or update the NCBI taxonomy (`taxon`, `taxon_name`) for a UniProt release.
 
-The taxonomy is scoped by UniProt release: the dump loaded with a release is kept next to it.
+    uv run database-taxonomy <workdir>/<release> [--commit]
+
+The first command of a release, before `database-uniprot` (`uniprot.py`), on the same directory,
+named after the release. The taxonomy is scoped by UniProt release: the dump loaded with a
+release is kept next to it, in `<workdir>/<release>/taxonomy/`, the NCBI `taxdump.tar.gz`
+unpacked (`nodes.dmp`, `names.dmp`, `merged.dmp`).
 
 Python port of BioSQL's `load_ncbi_taxonomy.pl --nodelete`, as the legacy drakkar-taxonomy ran it:
 
 - nodes are matched on their NCBI taxon ID: new ones are inserted, changed ones updated;
-- retired nodes (absent from the dump) are kept, because proteins may still reference them;
+- retired nodes (absent from the dump) are kept, because proteins may still reference them; the
+  log counts those used by proteins, and those merged into another node (`merged.dmp`);
 - the nested set (left_value, right_value) is rebuilt from the root, children ordered by NCBI ID;
 - the names of the nodes present in the dump are replaced. Unlike the Perl script, the names
   of retired nodes are kept, so old proteins keep a scientific name;
@@ -245,10 +251,10 @@ def load(release_directory: Path, *, commit: bool) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Load or update the NCBI taxonomy.")
-    parser.add_argument(
-        "release_directory", type=Path, help="e.g. <workdir>/2026_03, with the taxdump in taxonomy/"
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--commit", action="store_true", help="commit at the end")
+    parser.add_argument("release_directory", type=Path)
+    parser.add_argument("--commit", action="store_true")
     args = parser.parse_args()
     load(args.release_directory, commit=args.commit)
