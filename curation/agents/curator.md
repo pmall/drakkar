@@ -37,23 +37,13 @@ Run every lookup the curation needs; save tool calls by grouping them, never by 
 
 Curate from the full text with its supplementary files. Take what the authors present, with the thresholds they apply; never guess or recompute a threshold, from the methods or otherwise.
 
-`<dir>/manifest.json` lists the files you can use; its paths are relative to `<dir>`.
+`<dir>/manifest.json` lists the files downloaded, their paths relative to `<dir>`: the `article`, the `supplements`, each under the `name` the article gives it, and `figures`, the article's images from PMC's open access files (empty for an article had elsewhere, figures or not). Each file has its original, `file`, and, when it could be converted, its text, `text`, of `bytes` in size; a spreadsheet has instead `sheets`, one per sheet in workbook order, each with its `sheet` name, `text` and `bytes`. The files an archive held, and the images a Word document, a workbook or a presentation holds, are listed under its `name`.
 
-- `article`, and `supplements`, each with the `name` the article gives it (an archive gives one entry per file it held, each under its `name`).
-- For each file: `text` is the text to read, `bytes` its size, `file` the original.
-- A spreadsheet has instead `sheets`, one per sheet in workbook order, each with its `sheet` name, `text` and `bytes`.
-- A supplementary image has only its `name` and its `file`, the image to read.
-- `figures` lists the article's images from PMC's open access files: it is empty for an article had elsewhere, figures or not.
+Read the article's text whole: it is the evidence. Check the size of any other text first: its `bytes`, or `wc -c` without it. Over 50 kB, never read it whole: look at its structure (`head`, the line count, the column names), then take the rows you need with `grep`, `awk` or `cut`.
 
-Read the article's text whole: it is the evidence.
+Open an original only where its text falls short: a file without text, a table that came out badly (at that table), a figure you need. Read an image (a figure, a table given as an image) only when you need what it shows, never by default, and whole, with the Read tool, whatever its size. Read a PDF by its pages (Read with `pages`): a page shows its figures. A figure of an XML or HTML article that `figures` lacks: download it with `curation-download`, from its URL in the original.
 
-Check the size of any file other than the article's text first: its `bytes`, or `wc -c` without it. Over 50 kB, never read a text file other than the article's whole: look at its structure (`head`, the line count, the column names), then take the rows you need with `grep`, `awk` or `cut`.
-
-Open an original only where a table came out badly in its text, at that table.
-
-Read an image (a figure, a table given as an image) only when you need what it shows, never by default. An image has no size limit: read it whole, with the Read tool, whatever its size. A figure you need that `figures` lacks: download it with `curation-download`, from its URL in the article's original. A figure you need in a PDF: read its page (Read with `pages`).
-
-A supplementary file is relevant when it can hold interactions. Irrelevant ones, for instance: a video, a reporting summary, a peer review file, a checklist, a figure of non-interaction data, a file of raw source data whose values are already in a table that was read. A supplementary file that could not be read (not fetched, held by no copy, failed to convert) is judged relevant or not by what the text, its caption or its name show: a table of hits, a figure of an interaction experiment, data the text cites for an interaction.
+A supplementary file is relevant when it can hold interactions. Irrelevant ones, for instance: a video, a reporting summary, a peer review file, a checklist, a figure of non-interaction data, a file of raw source data whose values are already in a table that was read. A supplementary file you could not read (not fetched, held by no copy, or in a format you cannot read) is judged relevant or not by what the text, its caption or its name show: a table of hits, a figure of an interaction experiment, data the text cites for an interaction.
 
 A missing supplementary file is one the text cites and the manifest lacks. When it is relevant and the text gives its URL, download it with `curation-download` before writing.
 

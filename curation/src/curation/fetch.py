@@ -28,17 +28,21 @@ answering yes or no by one test.
 
 It writes the article, `<pmid>.xml`, `<pmid>.html` or `<pmid>.pdf`, the supplementary files in
 `<pmid>.supp/`, and the article's figures, the other images of the PMC open access files, in
-`<pmid>.fig/`. A TIFF or a BMP image is saved as PNG, one file per image it holds
-(`<name>-<n>.png` when several), which the Read tool reads. Each file but an image is converted
-as `curation-parse` does (`parse.py`), its texts beside it; an image is read as it is.
+`<pmid>.fig/`. Then the parser (`parse.py`) makes each file ready to read (`prepare`) and
+converts it as `curation-parse` does: a TIFF or a BMP image replaced by its PNG, one file per
+image it holds (`<name>-<n>.png` when several), which the Read tool reads; a Word document, a
+workbook or a presentation (`.docx`, `.xlsx`, `.xlsm`, `.pptx`) kept, with each image it holds
+(its `media` folder, its videos left out) saved beside it, `<file>.<image>`; each file but an
+image converted, its texts beside it; an image read as it is.
 
-Last, only when the article could be converted, the manifest `manifest.json`, the files the
-curation can use: `article`, with `file`, the original, `text`, its text, and `bytes`, the size
-of the text; `supplements`, each with the `name` the article gives it, `file`, then `text` and
-`bytes`, or for a spreadsheet `sheets`, each with `sheet`, its name, `text` and `bytes` (an image:
-`name` and `file`); `figures`, the paths of the figures. Paths are relative to `<dir>`. A
-publication directory set up from files the user provides holds the same: each file converted
-with `curation-parse`, which prints its entry, and the manifest in this format, `bytes` optional.
+Last, when the article was downloaded, the manifest `manifest.json`, every file downloaded:
+`article`, with `file`, the original, `text`, its text, and `bytes`, the size of the text;
+`supplements`, each with the `name` the article gives it (the images of an archive or a document
+under its name), `file`, then `text` and `bytes`, or for a spreadsheet `sheets`, each with
+`sheet`, its name, `text` and `bytes`; `figures`, the paths of the figures. An image, or a file
+that could not be converted, has its `file` alone. Paths are relative to `<dir>`. A publication
+directory set up from files the user provides holds the same: each file converted with
+`curation-parse`, which prints its entries, and the manifest in this format, `bytes` optional.
 
 It prints its report. First a line saying where the article comes from: `Full text: <PMCID>
 (<license>)` or `Full text: <source> (<license>, <URL>)`, ending with `, supplementary files
@@ -49,11 +53,11 @@ supplementary file missing, with every place tried.
 
 `curation-download` saves the file at each URL (a supplementary file the article links to, a
 commercial construct's page or datasheet) in `<dir>` (the type from the response when its name
-gives none), an archive unpacked (its videos left out), each file but an image converted beside
-it, as `curation-parse` does; a TIFF or a BMP image saved as PNG. Under a `#` header, one line per
-file, starting with its URL: its entry, as in the manifest, in JSON, its paths starting with
-`<dir>` (an image: `file` alone), or why it could not be had (the HTTP outcome, not converted). It
-ignores an option it does not define, never refuses it.
+gives none), an archive unpacked (its videos left out), a document's images saved beside it, each
+file but an image converted beside it, as `curation-parse` does; a TIFF or a BMP image saved as
+PNG. Under a `#` header, one line per file, starting with its URL: its entry, as in the manifest,
+in JSON, its paths starting with `<dir>` (an image: `file` alone), or why it could not be had (the
+HTTP outcome, not converted). It ignores an option it does not define, never refuses it.
 
 Configuration, in the project's `.env`: `UNPAYWALL_EMAIL`, the address Unpaywall asks for to
 answer a request. Without it Unpaywall is not asked at all.
@@ -74,12 +78,24 @@ from pathlib import Path
 from typing import Any, cast
 from urllib.parse import quote, unquote, urljoin, urlparse
 
-import pymupdf
 from dotenv import load_dotenv
 from lxml import etree
 from lxml.etree import _Element  # pyright: ignore[reportPrivateUsage]
 
-from curation.parse import XLINK, ParseError, class_names, convert, one_line, tag_name
+from curation.parse import (
+    IMAGES,
+    VIDEOS,
+    XLINK,
+    class_names,
+    entries,
+    entry,
+    is_image,
+    is_video,
+    one_line,
+    prepare,
+    save,
+    tag_name,
+)
 
 EUROPE_PMC = "https://www.ebi.ac.uk/europepmc/webservices/rest"
 EFETCH = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
@@ -99,15 +115,11 @@ SUPPLEMENT_SUFFIXES = {
     ".txt",
     ".docx",
     ".doc",
+    ".pptx",
+    ".ppt",
     ".pdf",
     ".zip",
 }
-# Supplementary files no curation reads.
-VIDEOS = {".mp4", ".mov", ".avi", ".wmv", ".mpg", ".mpeg", ".m4v", ".webm"}
-# Images are read as they are, never converted to text.
-IMAGES = {".tif", ".tiff", ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".eps", ".svg", ".webp"}
-# Images the Read tool cannot open, saved as PNG.
-TO_PNG = {".tif", ".tiff", ".bmp"}
 # Preprints are not peer-reviewed publications: their copies are never fetched.
 PREPRINT_HOSTS = (
     "biorxiv.org",
@@ -198,17 +210,6 @@ def _text(el: _Element) -> str:
     return one_line(" ".join(str(t) for t in el.itertext()))
 
 
-def _safe_name(name: str, taken: set[str]) -> str:
-    """A file name with no path and no odd character, unique in the directory."""
-    name = re.sub(r"[^\w.-]", "_", name).lstrip(".") or "file"
-    stem, suffix, n = Path(name).stem, Path(name).suffix, 1
-    while name in taken:
-        n += 1
-        name = f"{stem}_{n}{suffix}"
-    taken.add(name)
-    return name
-
-
 def _extension(name: str) -> str:
     """The extension of a file name when it names a file type: not `.s004` in PLOS's
     `journal.ppat.1002331.s004`."""
@@ -230,7 +231,7 @@ def _left_out(name: str, caption: str = "") -> bool:
     """Whether a supplementary file is never fetched: a video (or an archive named as videos,
     `movies_s1_to_s3.zip`), or by its caption the Reporting Summary (a checklist) or the peer
     review file: none holds an interaction."""
-    if Path(name).suffix.lower() in VIDEOS or re.search(r"movie|video", name, re.I):
+    if is_video(name):
         return True
     useless = r"reporting summary|peer review (file|report)|transparent peer review"
     return re.search(useless, caption, re.I) is not None
@@ -244,12 +245,11 @@ def _typed(name: str, content_type: str) -> str:
 
 
 def unpacked(name: str, body: bytes, url: str) -> Iterator[tuple[str, str, bytes]]:
-    """A downloaded file, or each file of a zip archive but its videos, a TIFF or a BMP image as
-    PNG (`as_png`): its name, its URL (`<url>#<path>` for a file of an archive) and its body."""
+    """A downloaded file, or each file of a zip archive but its videos: its name, its URL
+    (`<url>#<path>` for a file of an archive) and its body."""
     archive = _zip(body) if name.lower().endswith(".zip") else None
     if archive is None:
-        for file, content in as_png(name, body):
-            yield file, url, content
+        yield name, url, body
         return
     for info in archive.infolist():
         member = Path(info.filename)
@@ -257,44 +257,6 @@ def unpacked(name: str, body: bytes, url: str) -> Iterator[tuple[str, str, bytes
             continue
         if not _left_out(member.name):
             yield from unpacked(member.name, archive.read(info), f"{url}#{info.filename}")
-
-
-def as_png(name: str, body: bytes) -> list[tuple[str, bytes]]:
-    """A TIFF or a BMP image as PNG, in RGB (a TIFF can be CMYK), one file per image it holds
-    (`<name>-<n>.png` when several); a file that cannot be opened as it is."""
-    if Path(name).suffix.lower() not in TO_PNG:
-        return [(name, body)]
-    try:
-        document = pymupdf.open(stream=body)
-    except pymupdf.FileDataError:
-        return [(name, body)]
-    with document:  # one page per image, its image at its own resolution
-        blocks = [
-            block
-            for page in document
-            for block in cast(dict[str, Any], page.get_text("dict"))["blocks"]  # pyright: ignore[reportUnknownMemberType]
-            if block["type"] == 1
-        ]
-    images = [
-        cast(bytes, pymupdf.Pixmap(pymupdf.csRGB, pymupdf.Pixmap(b["image"])).tobytes("png"))
-        for b in blocks
-    ]
-    stem = Path(name).stem
-    if len(images) > 1:
-        return [(f"{stem}-{n}.png", image) for n, image in enumerate(images, 1)]
-    return [(f"{stem}.png", image) for image in images] or [(name, body)]
-
-
-def save(folder: Path, name: str, body: bytes) -> Path:
-    """A file saved in the folder under a name no other file there has."""
-    folder.mkdir(parents=True, exist_ok=True)
-    path = folder / _safe_name(name, {p.name for p in folder.iterdir()})
-    path.write_bytes(body)
-    return path
-
-
-def is_image(path: Path) -> bool:
-    return path.suffix.lower() in IMAGES
 
 
 def _same_file(name: str, url: str, text: str = "") -> bool:
@@ -788,12 +750,14 @@ class Fetch:
         return True
 
     def _keep(self, item: Supplement, name: str, body: bytes, url: str) -> None:
-        """A supplementary file saved; a zip archive is unpacked, its videos left out."""
+        """A supplementary file saved, a zip archive unpacked (its videos left out), each file
+        made ready to read (`prepare`)."""
         for file, where, content in unpacked(name, body, url):
             path = save(self.out / f"{self.pmid}.supp", file, content)
-            self.report.setdefault("supplements", []).append(
-                {"name": item.name, "file": str(path.relative_to(self.out)), "url": where}
-            )
+            for ready in prepare(self.out, str(path.relative_to(self.out))):
+                self.report.setdefault("supplements", []).append(
+                    {"name": item.name, "file": ready, "url": where}
+                )
 
     def figures(self) -> None:
         """The article's figures: the images of the PMC open access files that are no
@@ -804,7 +768,7 @@ class Fetch:
             if is_image(Path(name)) and url not in taken and (r := self.get(url)).status == 200:
                 for file, _, content in unpacked(name, r.body, url):
                     path = save(self.out / f"{self.pmid}.fig", file, content)
-                    figures.append(str(path.relative_to(self.out)))
+                    figures += prepare(self.out, str(path.relative_to(self.out)))
         self.report["figures"] = figures
 
     # The report
@@ -854,28 +818,24 @@ class Fetch:
     # The manifest
 
     def write_manifest(self) -> None:
-        """Every file converted, then the manifest of those the curation can use, written last
-        and only when the article could be converted: a manifest means the curation can start."""
+        """Every file converted, then the manifest of every file downloaded, written last, when
+        the article was downloaded: a manifest means the curation can start."""
         report = self.report
-        try:
-            article = convert(self.out, report["file"])
-        except ParseError as e:
-            report["not_converted"] = str(e)
-            return
-        supplements: list[dict[str, Any]] = []
-        for x in report["supplements"]:
-            if is_image(Path(x["file"])):
-                supplements.append({"name": x["name"], "file": x["file"]})
-                continue
-            try:
-                supplements.append({"name": x["name"]} | convert(self.out, x["file"]))
-            except ParseError as e:
-                x["not_converted"] = str(e)
+        article = self._entry(report)
+        supplements = [{"name": x["name"]} | self._entry(x) for x in report["supplements"]]
         path = self.out / MANIFEST
         tmp = path.with_suffix(".json.tmp")
         manifest = {"article": article, "supplements": supplements, "figures": report["figures"]}
         tmp.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
         tmp.replace(path)
+
+    def _entry(self, x: dict[str, Any]) -> dict[str, Any]:
+        """A file's entry of the manifest (`entry`), why it could not be converted moved to the
+        report."""
+        found = entry(self.out, x["file"])
+        if why := found.pop("not_converted", None):
+            x["not_converted"] = why
+        return found
 
     # The fetch
 
@@ -935,23 +895,20 @@ def report_lines(report: dict[str, Any]) -> list[str]:
 
 
 def download(out: Path, url: str, get: Get = http_get) -> list[str]:
-    """The file at a URL saved in `out`, an archive unpacked, each file but an image converted
-    beside it; returns one line per file: its entry, as in the manifest (paths starting with
-    `out`), or why it could not be had."""
+    """The file at a URL saved in `out`, an archive unpacked, each file made ready to read and
+    converted (`entries`); returns one line per file: its entry, as in the manifest (paths
+    starting with `out`), or why it could not be had or converted."""
     r = get(url)
     if r.status != 200:
         return [_outcome(r)]
     name = _typed(_url_name(r.url or url) or "file", r.content_type)
     lines: list[str] = []
     for file, _, content in unpacked(name, r.body, r.url or url):
-        path = save(out, file, content)
-        if is_image(path):
-            lines.append(json.dumps({"file": str(path)}, ensure_ascii=False))
-            continue
-        try:
-            lines.append(json.dumps(convert(Path(), str(path)), ensure_ascii=False))
-        except ParseError as e:
-            lines.append(f"{path}: not converted, {e}")
+        for found in entries(Path(), str(save(out, file, content))):
+            if why := found.pop("not_converted", None):
+                lines.append(f"{found['file']}: not converted, {why}")
+            else:
+                lines.append(json.dumps(found, ensure_ascii=False))
     return lines
 
 

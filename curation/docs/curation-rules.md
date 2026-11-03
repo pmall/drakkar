@@ -18,7 +18,7 @@ A case no rule decides is decided by these principles.
 
 A publication is curated from its full text, with its supplementary files. What the authors present is taken with the thresholds they apply: a threshold is never guessed, nor recomputed from the methods or otherwise.
 
-A supplementary file is relevant when it can hold interactions. Irrelevant, for instance: a video, a reporting summary, a peer review file, a checklist, a figure of non-interaction data, a file of raw source data whose values are already in a table that was read. A file that could not be read — not fetched, held by no copy, failed to convert — is judged relevant or not by what the text, its caption or its name show: a table of hits, a figure of an interaction experiment, data the text cites for an interaction.
+A supplementary file is relevant when it can hold interactions. Irrelevant, for instance: a video, a reporting summary, a peer review file, a checklist, a figure of non-interaction data, a file of raw source data whose values are already in a table that was read. A file that could not be read — not fetched, held by no copy, in a format that cannot be read — is judged relevant or not by what the text, its caption or its name show: a table of hits, a figure of an interaction experiment, data the text cites for an interaction.
 
 A missing supplementary file is one the text cites and the files at hand lack. When it is relevant and the text gives its URL, it is downloaded before the curation is written. A relevant file that could not be had leaves the publication selected rather than curated, with the reason in its note (the Drakkar database's `database.md#states`).
 

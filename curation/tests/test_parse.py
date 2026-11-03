@@ -1,17 +1,24 @@
 """The converters of curation-parse, on small samples of each file type (no network)."""
 
+import io
 import json
+import re
 import subprocess
 from datetime import datetime
 from pathlib import Path
+from typing import Any, cast
 
 import docx
 import openpyxl
 import pymupdf
 import pytest
 import xlwt
+from docx.opc.constants import RELATIONSHIP_TYPE as RT
+from docx.opc.packuri import PackURI
+from docx.opc.part import Part
+from lxml import etree
 
-from curation.parse import ParseError, convert, markdown_table, parse, sheets
+from curation.parse import ParseError, convert, parse, prepare, sheets
 
 # ppat.1002331.s00*.doc: supplementary tables of PMID 22046132 (CC BY). Ours, made once with
 # LibreOffice from a .docx (LibreOffice is no dependency): beyond-bmp.doc, and page-break.doc,
@@ -58,17 +65,20 @@ def test_jats(tmp_path: Path):
     path = tmp_path / "a.xml"
     path.write_text(JATS)
     assert parse(path) == (
-        "# NS1 binds TRIM25\n\n"
-        "## Abstract\n\nWe show that NS1 binds TRIM25.\n\n"
-        "## Results\n\n"
-        "NS1 co-precipitates TRIM25 (Fig. 1).\n\n"
-        "**Table 1.** Interactions.\n\n"
-        "| Bait | Prey | Prey |\n|---|---|---|\n"
-        "| NS1 | TRIM25 | Q14258 |\n| NS1 | RIG-I | O95786 |\n\n"
-        "**Figure 1.** Co-IP. Anti-FLAG.\n\n"
-        "### Mapping\n\nResidues 1-73 of NS1.\n\n"
-        "## Supporting Information\n\n"
-        "**Table S1.** Y2H screen. (file s1.xlsx)\n"
+        "<h1>NS1 binds TRIM25</h1>\n"
+        "<h2>Abstract</h2>\n<p>We show that NS1 binds TRIM25.</p>\n"
+        "<h2>Results</h2>\n"
+        "<p>NS1 co-precipitates TRIM25 (Fig. 1).</p>\n"
+        "<p><b>Table 1.</b> Interactions.</p>\n"
+        "<table>\n"
+        '<tr><th>Bait</th><th colspan="2">Prey</th></tr>\n'
+        '<tr><td rowspan="2">NS1</td><td>TRIM25</td><td>Q14258</td></tr>\n'
+        "<tr><td>RIG-I</td><td>O95786</td></tr>\n"
+        "</table>\n"
+        "<figure><figcaption><b>Figure 1.</b> Co-IP. Anti-FLAG.</figcaption></figure>\n"
+        "<h3>Mapping</h3>\n<p>Residues 1-73 of NS1.</p>\n"
+        "<h2>Supporting Information</h2>\n"
+        "<p><b>Table S1.</b> Y2H screen. (file s1.xlsx)</p>\n"
     )
 
 
@@ -81,7 +91,10 @@ def test_jats_formula_alternatives_and_bad_spans(tmp_path: Path):
         "<table-wrap><table><tr><td colspan='x'>a</td><td>b</td></tr></table></table-wrap>"
         "</body></article>"
     )
-    assert parse(path) == "Kd = 10^{-6} M\n\n**Table.**\n\n| a | b |\n|---|---|\n"
+    assert parse(path) == (
+        "<p>K<sub>d</sub> = 10^{-6} M</p>\n<p><b>Table.</b></p>\n"
+        "<table>\n<tr><td>a</td><td>b</td></tr>\n</table>\n"
+    )
 
 
 def test_jats_block_alternatives(tmp_path: Path):
@@ -92,7 +105,7 @@ def test_jats_block_alternatives(tmp_path: Path):
         "</alternatives></disp-formula><alternatives><p>First notation.</p><p>Second.</p>"
         "</alternatives></body></article>"
     )
-    assert parse(path) == "The ratio:\n\na/b\n\nFirst notation.\n"
+    assert parse(path) == "<p>The ratio:</p>\n<p>a/b</p>\n<p>First notation.</p>\n"
 
 
 def test_jats_namespaced(tmp_path: Path):
@@ -102,7 +115,7 @@ def test_jats_namespaced(tmp_path: Path):
         "<article-title>NS1 binds TRIM25</article-title></title-group></article-meta></front>"
         "<body><sec><title>Results</title><p>Co-IP.</p></sec></body></article>"
     )
-    assert parse(path) == "# NS1 binds TRIM25\n\n## Results\n\nCo-IP.\n"
+    assert parse(path) == "<h1>NS1 binds TRIM25</h1>\n<h2>Results</h2>\n<p>Co-IP.</p>\n"
 
 
 def test_jats_text_inside_paragraphs(tmp_path: Path):
@@ -120,16 +133,43 @@ def test_jats_text_inside_paragraphs(tmp_path: Path):
         "</table-wrap-foot></table-wrap></sec></body></article>"
     )
     assert parse(path) == (
-        "## Methods\n\n"
-        "- Y2H screen\n- ORFeome\n- LUMIER\n\n"
-        "- IP immunoprecipitation\n\n"
-        "**Table.**\n\n| NS1 | TRIM25a |\n|---|---|\n\n"
-        "a Confirmed by co-IP.\n"
+        "<h2>Methods</h2>\n"
+        "<ul>\n<li>Y2H screen <ul><li>ORFeome</li></ul></li>\n<li>LUMIER</li>\n</ul>\n"
+        "<ul>\n<li>IP immunoprecipitation</li>\n</ul>\n"
+        "<p><b>Table.</b></p>\n"
+        "<table>\n<tr><td>NS1</td><td>TRIM25<sup>a</sup></td></tr>\n</table>\n"
+        "<p><sup>a</sup> Confirmed by co-IP.</p>\n"
     )
 
 
-def test_markdown_table_escapes_pipes_and_pads_rows():
-    assert markdown_table([["a", "b|c"], ["d"]]) == "| a | b\\|c |\n|---|---|\n| d |  |"
+def test_jats_nested_table_figure_and_table_given_as_an_image(tmp_path: Path):
+    """A table in a cell stays in it; a figure's image is its file in `<stem>.fig/`, found by its
+    name without extension, else the name the XML gives; a table given as an image is its
+    image."""
+    inner = "<table><tr><td>TRIM25</td><td>Q14258</td></tr></table>"
+    path = tmp_path / "a.xml"
+    path.write_text(
+        '<article xmlns:xlink="http://www.w3.org/1999/xlink"><body>'
+        f"<table-wrap><label>Table 1</label><table><tr><td>NS1</td><td>{inner}</td></tr></table>"
+        "</table-wrap>"
+        '<fig><label>Figure 1</label><caption><p>Co-IP.</p></caption><graphic xlink:href="g001"/>'
+        "</fig>"
+        '<fig><label>Figure 2</label><graphic xlink:href="g002.tif"/></fig>'
+        '<table-wrap><label>Table 2</label><graphic xlink:href="t002"/></table-wrap>'
+        "</body></article>"
+    )
+    (tmp_path / "a.fig").mkdir()
+    (tmp_path / "a.fig" / "g002.png").write_bytes(b"")  # saved from its TIFF
+    assert parse(path) == (
+        "<p><b>Table 1.</b></p>\n"
+        "<table>\n"
+        "<tr><td>NS1</td><td><table><tr><td>TRIM25</td><td>Q14258</td></tr></table></td></tr>\n"
+        "</table>\n"
+        '<figure><img src="g001"><figcaption><b>Figure 1.</b> Co-IP.</figcaption></figure>\n'
+        '<figure><img src="a.fig/g002.png"><figcaption><b>Figure 2.</b></figcaption></figure>\n'
+        "<p><b>Table 2.</b></p>\n"
+        '<figure><img src="t002"></figure>\n'
+    )
 
 
 def test_html(tmp_path: Path):
@@ -142,13 +182,15 @@ def test_html(tmp_path: Path):
         "<html><head><title>T</title><script>var x = 1;</script></head><body>"
         "<nav><a href='/'>Home</a></nav>"
         f"<article><h1>NS1 binds TRIM25</h1><h2>Results</h2>{paragraphs}"
-        "<table><tr><th>Bait</th><th>Prey</th></tr><tr><td>NS1</td><td>TRIM25</td></tr></table>"
-        "</article></body></html>"
+        "<table><tr><th>Bait</th><th>Prey</th></tr><tr><td>NS1</td><td>TRIM25<sup>a</sup></td>"
+        "</tr></table><figure><img src='https://journal.org/f1.png'></figure>"
+        f"{paragraphs}</article></body></html>"
     )
     text = parse(path)
-    assert "Paragraph 29: NS1 co-precipitates TRIM25" in text
-    assert "| NS1 | TRIM25 |" in text
-    assert "var x" not in text
+    assert "<p>Paragraph 29: NS1 co-precipitates TRIM25" in text
+    assert "<tr><td>NS1</td><td>TRIM25<sup>a</sup></td></tr>\n" in text
+    assert '<img src="https://journal.org/f1.png">' in text
+    assert "var x" not in text and "Home" not in text
 
 
 PMC_PAGE = """<html><body><hgroup><h1>NS1 binds <i>TRIM25</i></h1></hgroup>
@@ -190,17 +232,21 @@ def test_pmc_page(tmp_path: Path):
     path = tmp_path / "a.html"
     path.write_text(PMC_PAGE)
     assert parse(path) == (
-        "# NS1 binds TRIM25\n\n"
-        "## Abstract\n\nWe show that NS1 binds TRIM25.\n\n"
-        "## Results\n\n"
-        "NS1 co-precipitates TRIM25 (Fig. 1).\n\n"
-        "**Figure 1.** Co-IP. Anti-FLAG.\n\n"
-        "**Table 1.** Interactions.\n\n"
-        "| Bait | Prey | Prey |\n|---|---|---|\n| NS1 | TRIM25 | Q14258 |\n\n"
-        "Co-IP in HEK293T cells.\n\n"
-        "### Mapping\n\n- Residues 1-73 of NS1.\n\n"
-        "## Supplementary Material\n\n"
-        "**Supplementary material.** Table S1. Y2H screen. (file s1.xlsx)\n"
+        "<h1>NS1 binds TRIM25</h1>\n"
+        "<h2>Abstract</h2>\n<p>We show that NS1 binds TRIM25.</p>\n"
+        "<h2>Results</h2>\n"
+        "<p>NS1 co-precipitates TRIM25 (Fig. 1).</p>\n"
+        '<figure><img src="f1.jpg"><figcaption><b>Figure 1.</b> Co-IP. Anti-FLAG.</figcaption>'
+        "</figure>\n"
+        "<p><b>Table 1.</b> Interactions.</p>\n"
+        "<table>\n"
+        '<tr><th>Bait</th><th colspan="2">Prey</th></tr>\n'
+        "<tr><td>NS1</td><td>TRIM25</td><td>Q14258</td></tr>\n"
+        "</table>\n"
+        "<p>Co-IP in HEK293T cells.</p>\n"
+        "<h3>Mapping</h3>\n<ul>\n<li>Residues 1-73 of NS1.</li>\n</ul>\n"
+        "<h2>Supplementary Material</h2>\n"
+        "<p><b>Supplementary material.</b> Table S1. Y2H screen. (file s1.xlsx)</p>\n"
     )
 
 
@@ -323,14 +369,105 @@ def test_docx(tmp_path: Path):
     path = tmp_path / "a.docx"
     document.save(str(path))
     assert parse(path) == (
-        "# Table S1\n\nValidated interactions.\n\n| Bait | Prey |\n|---|---|\n| NS1 | TRIM25 |\n"
+        "<h1>Table S1</h1>\n<p>Validated interactions.</p>\n"
+        "<table>\n<tr><td>Bait</td><td>Prey</td></tr>\n<tr><td>NS1</td><td>TRIM25</td></tr>\n"
+        "</table>\n"
     )
 
 
-def table_rows(markdown: str) -> list[list[str]]:
-    """The rows of the Markdown tables of a converted text, their header separator left out."""
-    lines = [line for line in markdown.splitlines() if line.startswith("| ")]
-    return [line[2:-2].split(" | ") for line in lines]
+W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+MC = "http://schemas.openxmlformats.org/markup-compatibility/2006"
+
+
+def word_xml(xml: str) -> Any:
+    """A Word element written in XML, its namespaces (`w`, `mc`, `v`) declared on it."""
+    namespaces = f'xmlns:w="{W}" xmlns:mc="{MC}" xmlns:v="urn:schemas-microsoft-com:vml"'
+    return etree.fromstring(re.sub(r"^<([\w:]+)", rf"<\1 {namespaces}", xml, count=1))
+
+
+def test_docx_cleaned_up(tmp_path: Path):
+    """Each part of a Word document that holds content: a heading, a superscript, a list nested
+    by level, merged cells, a table in a cell, an image where it stands, a tracked insertion (its
+    deletion left out), a field's result in both of Word's forms (never its code), a text box
+    read once (Word writes it twice), a content control, text in the Symbol font, a footnote."""
+    document = docx.Document()
+    document.add_heading("Table S1", level=1)
+    paragraph = document.add_paragraph("Kd = 10")
+    paragraph.add_run("-6").font.superscript = True
+    table = document.add_table(rows=3, cols=3)
+    table.cell(0, 0).merge(table.cell(0, 1)).text = "Bait and prey"
+    table.cell(0, 2).text = "Score"
+    table.cell(1, 0).merge(table.cell(2, 0)).text = "NS1"
+    table.cell(1, 1).text = "TRIM25"
+    table.cell(1, 2).text = "2"
+    table.cell(2, 1).add_table(rows=1, cols=2).cell(0, 0).text = "RIG-I"
+    document.add_paragraph("Figure 1. Co-IP.")
+    pixmap = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 2, 2), False)
+    document.add_picture(io.BytesIO(cast(bytes, pixmap.tobytes("png"))))
+    numbered = '<w:pPr><w:numPr><w:ilvl w:val="{}"/><w:numId w:val="1"/></w:numPr></w:pPr>'
+    paragraphs = [
+        *(
+            f"<w:p>{numbered.format(level)}<w:r><w:t>{text}</w:t></w:r></w:p>"
+            for level, text in [(0, "Y2H screen"), (1, "ORFeome"), (0, "LUMIER")]
+        ),
+        '<w:p><w:ins w:id="1" w:author="a"><w:r><w:t>Kept.</w:t></w:r></w:ins>'
+        '<w:del w:id="2" w:author="a"><w:r><w:delText>Deleted.</w:delText></w:r></w:del></w:p>',
+        '<w:p><w:r><w:t xml:space="preserve">Table S</w:t></w:r>'
+        '<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText>SEQ Table</w:instrText>'
+        '</w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>2</w:t></w:r>'
+        '<w:r><w:fldChar w:fldCharType="end"/></w:r>'
+        '<w:r><w:t xml:space="preserve">, Figure S</w:t></w:r><w:fldSimple w:instr="SEQ Figure">'
+        "<w:r><w:t>3</w:t></w:r></w:fldSimple></w:p>",
+        "<w:p><w:r><mc:AlternateContent><mc:Choice Requires='wps'><w:drawing><w:txbxContent><w:p>"
+        "<w:r><w:t>In a text box.</w:t></w:r></w:p></w:txbxContent></w:drawing></mc:Choice>"
+        "<mc:Fallback><w:pict><v:textbox><w:txbxContent><w:p><w:r><w:t>In a text box.</w:t>"
+        "</w:r></w:p></w:txbxContent></v:textbox></w:pict></mc:Fallback></mc:AlternateContent>"
+        "</w:r></w:p>",
+        "<w:sdt><w:sdtContent><w:p><w:r><w:t>In a content control.</w:t></w:r></w:p></w:sdtContent>"
+        "</w:sdt>",
+        '<w:p><w:r><w:t>IFN-</w:t></w:r><w:r><w:rPr><w:rFonts w:ascii="Symbol" w:hAnsi="Symbol"/>'
+        '</w:rPr><w:t>g</w:t></w:r><w:r><w:t xml:space="preserve"> and </w:t></w:r><w:r><w:sym '
+        'w:font="Symbol" w:char="F061"/></w:r><w:r><w:t>-actinin</w:t></w:r><w:r>'
+        '<w:footnoteReference w:id="1"/></w:r></w:p>',
+    ]
+    body: Any = cast(Any, document.element).body
+    for xml in paragraphs:
+        body.insert(len(body) - 1, word_xml(xml))
+    notes = (
+        f'<w:footnotes xmlns:w="{W}"><w:footnote w:id="1"><w:p><w:r><w:footnoteRef/></w:r>'
+        "<w:r><w:t>Confirmed by co-IP.</w:t></w:r></w:p></w:footnote></w:footnotes>"
+    ).encode()
+    footnotes = "application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"
+    part = Part(PackURI("/word/footnotes.xml"), footnotes, notes, document.part.package)
+    document.part.relate_to(part, RT.FOOTNOTES)
+    document.save(str(tmp_path / "a.docx"))
+    assert prepare(tmp_path, "a.docx") == ["a.docx", "a.docx.image1.png"]
+    assert parse(tmp_path / "a.docx") == (
+        "<h1>Table S1</h1>\n"
+        "<p>Kd = 10<sup>-6</sup></p>\n"
+        "<table>\n"
+        '<tr><td colspan="2">Bait and prey</td><td>Score</td></tr>\n'
+        '<tr><td rowspan="2">NS1</td><td>TRIM25</td><td>2</td></tr>\n'
+        "<tr><td><table><tr><td>RIG-I</td><td></td></tr></table></td><td></td></tr>\n"
+        "</table>\n"
+        "<p>Figure 1. Co-IP.</p>\n"
+        '<p><img src="a.docx.image1.png"></p>\n'
+        "<ul>\n<li>Y2H screen<ul><li>ORFeome</li></ul></li>\n<li>LUMIER</li>\n</ul>\n"
+        "<p>Kept.</p>\n"
+        "<p>Table S2, Figure S3</p>\n"
+        "<p>In a text box.</p>\n"
+        "<p>In a content control.</p>\n"
+        "<p>IFN-\u03b3 and \u03b1-actinin<sup>1</sup></p>\n"
+        "<p><sup>1</sup> Confirmed by co-IP.</p>\n"
+    )
+
+
+def table_rows(text: str) -> list[list[str]]:
+    """The rows of the HTML tables of a converted text, a cell spanning columns repeated over
+    them."""
+    rows = [line for line in text.splitlines() if line.startswith("<tr>")]
+    cell = re.compile(r'<td(?: colspan="(\d+)")?>(.*?)</td>')
+    return [[c for n, c in cell.findall(row) for _ in range(int(n or 1))] for row in rows]
 
 
 def test_doc():
@@ -379,14 +516,16 @@ def test_doc_characters_beyond_the_basic_plane():
     """A character beyond U+FFFF takes 4 bytes in the text: the cell marks after it are still
     found."""
     assert parse(SAMPLES / "beyond-bmp.doc") == (
-        "Binding of \U0001d6fc-actinin (\U0001d6fc beyond U+FFFF) to NS1.\n\n"
-        "| Bait | Prey |\n|---|---|\n| \U0001d6fc-NS1 | TRIM25 |\n\nAfter the table.\n"
+        "<p>Binding of \U0001d6fc-actinin (\U0001d6fc beyond U+FFFF) to NS1.</p>\n"
+        "<table>\n<tr><td>Bait</td><td>Prey</td></tr>\n"
+        "<tr><td>\U0001d6fc-NS1</td><td>TRIM25</td></tr>\n</table>\n"
+        "<p>After the table.</p>\n"
     )
 
 
 def test_doc_page_break_ends_a_paragraph():
     assert parse(SAMPLES / "page-break.doc") == (
-        "Before the break.\n\nAfter the break.\n\nNext paragraph.\n"
+        "<p>Before the break.</p>\n<p>After the break.</p>\n<p>Next paragraph.</p>\n"
     )
 
 
@@ -430,7 +569,7 @@ def test_spreadsheet_gives_one_tsv_file_per_sheet(tmp_path: Path):
     assert (tmp_path / "1.supp" / "s1.xlsx.2.tsv").read_text() == ""
 
 
-def test_pdf_gives_plain_text_and_xml_markdown(tmp_path: Path):
+def test_pdf_gives_plain_text_and_xml_html(tmp_path: Path):
     document = pymupdf.open()
     document.new_page().insert_text((72, 72), "NS1 binds TRIM25")
     document.save(tmp_path / "1.pdf")
@@ -439,8 +578,8 @@ def test_pdf_gives_plain_text_and_xml_markdown(tmp_path: Path):
     assert pdf == {"file": "1.pdf", "text": "1.pdf.txt", "bytes": pdf["bytes"]}
     assert (tmp_path / "1.pdf.txt").read_text() == "--- page 1 ---\n\nNS1 binds TRIM25\n\n"
     xml = convert(tmp_path, "1.xml")
-    assert xml == {"file": "1.xml", "text": "1.xml.md", "bytes": xml["bytes"]}
-    assert xml["bytes"] == (tmp_path / "1.xml.md").stat().st_size
+    assert xml == {"file": "1.xml", "text": "1.xml.html", "bytes": xml["bytes"]}
+    assert xml["bytes"] == (tmp_path / "1.xml.html").stat().st_size
 
 
 def test_text_files_are_their_own_text(tmp_path: Path):
@@ -505,14 +644,24 @@ def test_refused_file_writes_nothing(tmp_path: Path):
 
 
 def test_command_prints_the_manifest_entries(tmp_path: Path):
+    """Every file listed: an image (a damaged TIFF as it is) and a file that cannot be converted
+    by their file alone, why on stderr."""
     (tmp_path / "1.xml").write_text(JATS)
     (tmp_path / "s1.tif").write_bytes(b"II*\x00")
     workbook(tmp_path / "s2.xlsx")
-    command = ["uv", "run", "curation-parse", str(tmp_path), "1.xml", "s1.tif", "s2.xlsx"]
-    done = subprocess.run(command, capture_output=True, text=True)
+    (tmp_path / "s3.rtf").write_text("{\\rtf1 NS1 binds TRIM25}")
+    files = ["1.xml", "s1.tif", "s2.xlsx", "s3.rtf", "s4.pdf"]
+    done = subprocess.run(
+        ["uv", "run", "curation-parse", str(tmp_path), *files], capture_output=True, text=True
+    )
     assert done.returncode == 1
-    assert done.stderr == "s1.tif: not converted, no converter for .tif\n"
+    assert done.stderr == (
+        "s3.rtf: not converted, no converter for .rtf\ns4.pdf: not converted, no such file\n"
+    )
     entries = [json.loads(line) for line in done.stdout.splitlines()]
-    assert [e.get("text") for e in entries] == ["1.xml.md", None]
-    assert [s["sheet"] for s in entries[1]["sheets"]] == ["Y2H; Caco-2", "Empty"]
-    assert (tmp_path / "1.xml.md").read_text().startswith("# NS1 binds TRIM25")
+    assert [e["file"] for e in entries] == ["1.xml", "s1.tif", "s2.xlsx", "s3.rtf"]
+    assert entries[0]["text"] == "1.xml.html"
+    assert entries[1] == {"file": "s1.tif"}
+    assert [s["sheet"] for s in entries[2]["sheets"]] == ["Y2H; Caco-2", "Empty"]
+    assert entries[3] == {"file": "s3.rtf"}
+    assert (tmp_path / "1.xml.html").read_text().startswith("<h1>NS1 binds TRIM25</h1>\n")

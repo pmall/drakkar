@@ -18,10 +18,10 @@ You run a curation batch: publications, each curated by a `curator` agent from i
 
    Write them at once, as the model and the effort may change during the session and other sessions select their publications outside this batch: `mkdir -p <batch> && echo "<model> (effort $CLAUDE_EFFORT, $AI_AGENT, commit $(git rev-parse --short HEAD))" > <batch>/author.txt`, then the publications in `<batch>/pmids.txt`, one per line. `pmids.txt` is the batch, never changed.
 
-2. **Full texts**: a publication directory, `<batch>/<pmid>/`, with its `manifest.json` is ready (files the user provided). Fetch the others: `mkdir -p <batch>/<pmid> && uv run curation-fetch <batch>/<pmid> <pmid> > <batch>/<pmid>/fetch.txt`. The report's first line says where the article comes from, or why there is none; the manifest is written only when the article could be had and converted. Read the reports, never the full texts.
+2. **Full texts**: a publication directory, `<batch>/<pmid>/`, with its `manifest.json` is ready (files the user provided). Fetch the others: `mkdir -p <batch>/<pmid> && uv run curation-fetch <batch>/<pmid> <pmid> > <batch>/<pmid>/fetch.txt`. The report's first line says where the article comes from, or why there is none; the manifest is written only when the article could be had. Read the reports, never the full texts.
 
    - `Full text: not downloaded` (free, but no copy could be downloaded): fetch once more, as the failure may pass; still not downloaded, try the browser (below).
-   - Still without the article (`Full text: closed`, not downloaded, or not converted): no curator; write its note in `<batch>/<pmid>/curation.txt`: `SELECTED`, then why there is no full text.
+   - Still without the article (`Full text: closed`, or not downloaded): no curator; write its note in `<batch>/<pmid>/curation.txt`: `SELECTED`, then why there is no full text.
 
 3. **Curate**: one `curator` agent per publication with a manifest, a few at a time, sent only `dir: <batch>/<pmid>`, `pmid: <pmid>`. It writes `descriptions.jsonl` and `curation.txt` in its directory. Without them, run it once more; still without them, write its note in `<batch>/<pmid>/curation.txt`: `SELECTED`, then that its curation did not finish.
 
@@ -37,4 +37,4 @@ You run a curation batch: publications, each curated by a `curator` agent from i
 
 ## Browser
 
-When your session has browser tools, the browser is the last resort for the files the tools could not download: sites block robots, not a browser. The article comes only from the copies the fetch report tried, never one declaring a paywall; a page giving only the abstract gives no access. A human check (a captcha) is passed by the user, never by you: ask them. Move the browser's downloads into `<batch>/<pmid>/`, convert them with `uv run curation-parse <batch>/<pmid> <file>...`, which prints each file's manifest entry, and write or complete `manifest.json` (`article`, `supplements` each with its `name`, `figures`).
+When your session has browser tools, the browser is the last resort for the files the tools could not download: sites block robots, not a browser. The article comes only from the copies the fetch report tried, never one declaring a paywall; a page giving only the abstract gives no access. A human check (a captcha) is passed by the user, never by you: ask them. Move the browser's downloads into `<batch>/<pmid>/`, convert them with `uv run curation-parse <batch>/<pmid> <file>...`, which prints the manifest entries of each file and of its images, and write or complete `manifest.json` (`article`, `supplements` each with its `name`, `figures`).

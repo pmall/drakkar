@@ -5,11 +5,21 @@
 Converts each file, a path relative to `<dir>` (the publication directory), by its type, to texts
 written beside it and named by their format. No network.
 
-- Markdown, `<file>.md`: PMC XML (title, abstract, sections, captions, tables and supplementary
-  materials; references, acknowledgements, notes and peer reviews left out), a PMC article page
-  by its structure, as its XML (the same blocks, the back matter left out), any other HTML page
-  (its main text), a Word document (`.docx`, or `.doc` from Word 97-2003, through our own
-  reader).
+- HTML, `<file>.html`: PMC XML (title, abstract, sections, paragraphs, lists, figures, tables
+  and supplementary materials; references, acknowledgements, notes and peer reviews left out), a
+  PMC article page by its structure, as its XML (the same blocks, the back matter left out), any
+  other HTML page (its main text, as trafilatura finds it), a Word document (`.docx`, its XML
+  cleaned up: paragraphs, headings, lists, tables, images, text boxes, field results, footnotes
+  and endnotes, text in the Symbol font as the Greek letters and signs it shows; formatting,
+  headers, footers, comments and tracked deletions left out), a Word 97-2003 document (`.doc`,
+  through our own reader: its paragraphs and tables, a nested table flattened into its cell, its
+  pictures left out). Only the content is kept, in these tags: headings, paragraphs (`p`), lists
+  (`ul`, `ol`, `li`), tables (`table`, `tr`, `th`, `td`, with their `rowspan` and `colspan`, a
+  table in a cell kept in it), figures (`figure`, `img` with its `src`, `figcaption`), labels in
+  bold (`b`), `sup`, `sub`, `br`. Each block is on its own line, and so is each row of a table
+  and each item of a list. An image is its file when the publication directory holds it (a PMC
+  figure in `<stem>.fig/` beside the XML, where `curation-fetch` saves them; a Word document's
+  image beside it, where `prepare` saves them), else the name, URL or path the file gives.
 - Plain text, `<file>.txt`: a PDF's text page by page (`--- page N ---`), line by line in the
   order pymupdf reads it, nothing moved; a line read right after another at the same height
   continues it after a tab, so a table's row the PDF writes cell after cell is one line, while a
@@ -23,10 +33,13 @@ written beside it and named by their format. No network.
   one, among comma, semicolon and tab, that gives the most rows the same number of fields); a file
   whose encoding is not found is refused.
 
-Prints each file's entry of the manifest (`fetch.py`), one JSON line, paths relative to `<dir>`:
-`file`, then `text` and `bytes`, or `sheets`, each with `sheet`, `text` and `bytes`. A scanned
-PDF, a damaged file, an image or any other type is refused with the reason, and nothing is written
-for it.
+Each file is first made ready to read, as `curation-fetch` makes the downloads (`prepare`): a
+TIFF or a BMP image replaced by its PNG, a document's images saved beside it. Prints the entries
+of the manifest (`fetch.py`) of each file, then of its images, one JSON line each, paths relative
+to `<dir>`: `file`, then `text` and `bytes`, or `sheets`, each with `sheet`, `text` and `bytes`.
+An image has its `file` alone; so has a file that cannot be converted (a scanned PDF, a damaged
+file, a type with no converter), why on stderr, nothing written for it. A file that does not
+exist is refused.
 """
 
 import argparse
@@ -37,6 +50,7 @@ import json
 import re
 import struct
 import sys
+import zipfile
 from collections import Counter
 from collections.abc import Callable, Collection, Iterable, Iterator
 from dataclasses import dataclass
@@ -45,14 +59,11 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import charset_normalizer
-import docx
 import olefile
 import openpyxl
 import pymupdf
 import trafilatura
 import xlrd
-from docx.table import Table
-from docx.text.paragraph import Paragraph
 from lxml import etree
 from lxml.etree import _Element  # pyright: ignore[reportPrivateUsage]
 
@@ -65,15 +76,170 @@ def one_line(text: str) -> str:
     return " ".join(text.split())
 
 
-def markdown_table(rows: list[list[str]]) -> str:
-    """Rows of cells as a Markdown table, the first row as its header."""
-    if not rows:
-        return ""
-    width = max(len(r) for r in rows)
-    cells = [[one_line(c).replace("|", "\\|") for c in r] + [""] * (width - len(r)) for r in rows]
-    lines = ["| " + " | ".join(r) + " |" for r in cells]
-    lines.insert(1, "|" + "---|" * width)
-    return "\n".join(lines)
+# HTML texts
+
+# The tags of the HTML texts, each with the attributes it keeps: the rest is cleaned away.
+TAGS: dict[str, set[str]] = {
+    **{f"h{n}": set() for n in range(1, 7)},
+    "p": set(),
+    "ul": set(),
+    "ol": set(),
+    "li": set(),
+    "table": set(),
+    "tr": set(),
+    "th": {"rowspan", "colspan"},
+    "td": {"rowspan", "colspan"},
+    "figure": set(),
+    "figcaption": set(),
+    "img": {"src"},
+    "b": set(),
+    "sup": set(),
+    "sub": set(),
+    "br": set(),
+}
+# Never text: their content is left out.
+NEVER = {"script", "style", "noscript", "template"}
+
+
+def _add_text(parent: _Element, text: str) -> None:
+    """Text added at the end of an element's content."""
+    if len(parent):
+        parent[-1].tail = (parent[-1].tail or "") + text
+    else:
+        parent.text = (parent.text or "") + text
+
+
+def _squeeze(block: _Element) -> None:
+    """A block's text in one line, its spaces single, none at the start or the end of a block, a
+    cell or an item, nor between the rows and cells of a table or the items of a list."""
+    for el in block.iter():
+        el.text = re.sub(r"\s+", " ", el.text) if el.text else el.text
+        el.tail = re.sub(r"\s+", " ", el.tail) if el.tail else el.tail
+    for el in block.iter("table", "tr", "ul", "ol", "figure"):
+        el.text = el.text if (el.text or "").strip() else None
+        for child in el:
+            child.tail = child.tail if (child.tail or "").strip() else None
+    for el in block.iter("p", "li", "td", "th", "figcaption", "h1", "h2", "h3", "h4", "h5", "h6"):
+        el.text = (el.text or "").lstrip() or None
+        last = el[-1] if len(el) else None
+        if last is not None:
+            last.tail = (last.tail or "").rstrip() or None
+        else:
+            el.text = (el.text or "").rstrip() or None
+
+
+def _all_text(el: _Element) -> str:
+    return "".join(cast(Iterable[str], el.itertext()))
+
+
+def _filled(block: _Element) -> bool:
+    return bool(_all_text(block).strip()) or block.find(".//img") is not None
+
+
+def _line(el: _Element) -> str:
+    return etree.tostring(el, encoding="unicode", method="html", with_tail=False)
+
+
+def html_text(blocks: Iterable[_Element]) -> str:
+    """The blocks of an HTML text, each on its own line, and each row of a table and each item of
+    a list on its own line, so that a search finds them; empty blocks left out."""
+    lines: list[str] = []
+    for block in blocks:
+        _squeeze(block)
+        if block.tag in ("table", "ul", "ol") and _filled(block):
+            lines += [f"<{block.tag}>", *(_line(child) for child in block), f"</{block.tag}>"]
+        elif block.tag == "img" or _filled(block):
+            lines.append(_line(block))
+    return "".join(f"{line}\n" for line in lines)
+
+
+def _fill(parent: _Element, el: _Element, skip: Collection[str] = ()) -> _Element:
+    """The content of an element, of PMC XML or HTML, added to an HTML element: its text, its
+    superscripts and subscripts, a table as a table, a list as a list; the rest of its markup
+    cleaned away, the text of a block, a cell or an item set apart by a space. Returns the
+    HTML element."""
+    _add_text(parent, el.text or "")
+    for child in el:
+        tag = tag_name(child)
+        if not tag or tag in NEVER or tag in skip:
+            pass
+        elif tag == "alternatives":  # one formula in several notations: the first
+            notations = [c for c in child if tag_name(c)]
+            if notations:
+                _fill(parent, notations[0], skip)
+        elif tag in ("sup", "sub"):
+            _fill(etree.SubElement(parent, tag), child, skip)
+        elif tag == "table":
+            parent.append(_html_table(child))
+        elif tag in ("list", "def-list", "ul", "ol"):
+            parent.append(_list(child))
+        elif tag in ("break", "br"):
+            _add_text(parent, " ")
+        elif tag in SEPARATE:
+            _add_text(parent, " ")
+            _fill(parent, child, skip)
+            _add_text(parent, " ")
+        else:
+            _fill(parent, child, skip)
+        _add_text(parent, child.tail or "")
+    return parent
+
+
+def _span(value: str | None) -> int:
+    try:
+        return max(int(value or 1), 1)
+    except ValueError:
+        return 1
+
+
+def _rows(table: _Element) -> Iterator[_Element]:
+    """The rows of a table, not those of a table in one of its cells."""
+    for child in table:
+        tag = tag_name(child)
+        if tag == "tr":
+            yield child
+        elif tag in ("thead", "tbody", "tfoot"):
+            yield from (row for row in child if tag_name(row) == "tr")
+
+
+def _html_table(table: _Element) -> _Element:
+    """A table, of PMC XML or HTML, as it is: its rows, their header and data cells with their
+    spans, a table in a cell kept in it."""
+    found = etree.Element("table")
+    for tr in _rows(table):
+        row = etree.SubElement(found, "tr")
+        for cell in tr:
+            if (tag := tag_name(cell)) in ("td", "th"):
+                spans = {s: str(n) for s in ("rowspan", "colspan") if (n := _span(cell.get(s))) > 1}
+                _fill(etree.SubElement(row, tag, spans), cell)
+    return found
+
+
+def _list(el: _Element) -> _Element:
+    """A list, of PMC XML (a list, or a list of definitions, its terms with them) or HTML, its
+    items each with their content, a list in an item kept in it."""
+    ordered = tag_name(el) == "ol" or (el.get("list-type") or "").startswith(
+        ("order", "alpha", "roman")
+    )
+    found = etree.Element("ol" if ordered else "ul")
+    for item in el:
+        if tag_name(item) in ("list-item", "def-item", "li"):
+            _fill(etree.SubElement(found, "li"), item)
+    return found
+
+
+def _top_tables(el: _Element) -> list[_Element]:
+    """The tables in an element, not those in a cell of another."""
+    return [
+        t for t in el.iter("{*}table") if not any(tag_name(a) == "table" for a in t.iterancestors())
+    ]
+
+
+def _labelled(tag: str, label: str) -> _Element:
+    """An element starting with a label in bold."""
+    found = etree.Element(tag)
+    etree.SubElement(found, "b").text = label
+    return found
 
 
 # PMC XML (JATS)
@@ -94,8 +260,13 @@ BLOCKS = {
     "fig-group",
     "table-wrap-group",
 }
-# Elements whose text is set apart from the text around it, as a block's is.
-SEPARATE = BLOCKS | {"term", "def", "def-item", "list-item", "fn", "td", "th", "label", "title"}
+# Elements whose text is set apart from the text around it, as a block's is: of PMC XML, then of
+# HTML.
+SEPARATE = (
+    BLOCKS
+    | {"term", "def", "def-item", "list-item", "fn", "td", "th", "label", "title"}
+    | {"div", "section", "figure", "figcaption", "li", "dt", "dd", "tr", "h2", "h3", "h4"}
+)
 # Never read for a curation.
 DROPPED = {
     "ref-list",
@@ -117,107 +288,88 @@ def tag_name(el: _Element) -> str:
 
 def _text(el: _Element, skip: Collection[str] = ()) -> str:
     """All the text of an element in one line, but for its children whose tag is in `skip`."""
-    parts = [el.text or ""]
-    for child in el:
-        tag = tag_name(child)
-        if tag == "alternatives":  # one formula in several notations: the first
-            notations = [c for c in child if tag_name(c)]
-            parts.append(_text(notations[0], skip) if notations else "")
-        elif tag in SEPARATE and tag not in skip:
-            parts.append(f" {_text(child, skip)} ")
-        elif tag not in skip:
-            parts.append(_text(child, skip))
-        parts.append(child.tail or "")
-    return one_line("".join(parts))
+    return one_line(_all_text(_fill(etree.Element("p"), el, skip)))
 
 
-def _inline(el: _Element) -> str:
-    """The text of an element, without its nested blocks."""
-    return _text(el, BLOCKS)
-
-
-def _caption(el: _Element, kind: str) -> str:
+def _jats_caption(tag: str, el: _Element, kind: str) -> _Element:
+    """An element holding the label of a figure, a table or a supplementary material in bold
+    (`<kind>.` without a label), then its caption's title and paragraphs."""
     label = el.find("{*}label")
+    found = _labelled(tag, (_text(label, BLOCKS) if label is not None else kind) + ".")
     caption = el.find("{*}caption")
-    head = _inline(label) if label is not None else kind
-    text = ""
+    parts: list[_Element] = list(caption) if caption is not None else []
+    for part in parts:
+        if tag_name(part) in ("title", "p"):
+            _add_text(found, " ")
+            _fill(found, part)
+    return found
+
+
+def _figure(images: Iterable[str], caption: _Element | None) -> _Element:
+    found = etree.Element("figure")
+    for src in images:
+        etree.SubElement(found, "img", src=src)
     if caption is not None:
-        text = " ".join(_text(c) for c in caption if tag_name(c) in ("title", "p"))
-    return f"**{head}.** {text}".rstrip()
+        found.append(caption)
+    return found
 
 
-def _span(value: str | None) -> int:
-    try:
-        return max(int(value or 1), 1)
-    except ValueError:
-        return 1
-
-
-def _grid(table: _Element) -> list[list[str]]:
-    """The cells of an XHTML table, spans spread so that every row has its columns."""
-    rows: list[list[str]] = []
-    pending: dict[tuple[int, int], str] = {}  # cells of rowspans, by (row, column)
-    for r, tr in enumerate(table.iter("{*}tr")):
-        row: list[str] = []
-        cells = iter([c for c in tr if tag_name(c) in ("td", "th")])
-        cell = next(cells, None)
-        while cell is not None or (r, len(row)) in pending:
-            if (r, len(row)) in pending:
-                row.append(pending.pop((r, len(row))))
-                continue
-            assert cell is not None
-            text = _text(cell)
-            colspan, rowspan = _span(cell.get("colspan")), _span(cell.get("rowspan"))
-            for c in range(len(row), len(row) + colspan):
-                for below in range(r + 1, r + rowspan):
-                    pending[(below, c)] = text
-            row.extend([text] * colspan)
-            cell = next(cells, None)
-        rows.append(row)
-    return rows
-
-
-def _tables(tables: Iterable[_Element]) -> list[str]:
-    """The tables in Markdown; without any, the table is given as an image."""
-    return [markdown_table(_grid(table)) for table in tables] or ["(table given as an image)"]
-
-
-def _jats(children: Iterable[_Element], level: int) -> Iterator[str]:
+def _jats(
+    children: Iterable[_Element], level: int, src: Callable[[str], str]
+) -> Iterator[_Element]:
     for child in children:
         tag = tag_name(child)
         if tag in DROPPED or tag in ("label", "title", "caption"):
             continue
+        graphics = [src(g.get(XLINK) or "") for g in child.iter("{*}graphic") if g.get(XLINK)]
         if tag in ("sec", "app", "abstract", "trans-abstract", "boxed-text", "app-group"):
+            heading = etree.Element(f"h{min(level, 6)}")
             title = child.find("{*}title")
-            if title is not None and _inline(title):
-                yield "#" * min(level, 6) + " " + _inline(title)
+            if title is not None and _text(title, BLOCKS):
+                yield _fill(heading, title, BLOCKS)
             elif tag in ("abstract", "trans-abstract"):
-                yield "#" * min(level, 6) + " Abstract"
-            yield from _jats(child, level + 1)
+                heading.text = "Abstract"
+                yield heading
+            yield from _jats(child, level + 1, src)
         elif tag == "fig":
-            yield _caption(child, "Figure")
+            yield _figure(graphics, _jats_caption("figcaption", child, "Figure"))
         elif tag == "table-wrap":
-            yield _caption(child, "Table")
-            yield from _tables(child.iter("{*}table"))
+            yield _jats_caption("p", child, "Table")
+            if tables := _top_tables(child):
+                yield from (_html_table(t) for t in tables)
+            elif graphics:  # a table given as an image
+                yield _figure(graphics, None)
             for foot in child.iter("{*}table-wrap-foot"):
-                yield _text(foot)
+                yield _fill(etree.Element("p"), foot)
         elif tag == "supplementary-material":
+            found = _jats_caption("p", child, "Supplementary material")
             media = child.find(".//{*}media")
-            href = child.get(XLINK) or (media.get(XLINK) if media is not None else None)
-            yield _caption(child, "Supplementary material") + (f" (file {href})" if href else "")
-        elif tag == "list":
-            items = child.iter("{*}list-item")
-            yield "\n".join(f"- {_text(item, {'list'})}" for item in items)  # nested: own items
-        elif tag == "def-list":
-            yield "\n".join(f"- {_text(item)}" for item in child.iter("{*}def-item"))
+            if href := child.get(XLINK) or (media.get(XLINK) if media is not None else None):
+                _add_text(found, f" (file {href})")
+            yield found
+        elif tag in ("list", "def-list"):
+            yield _list(child)
         elif tag == "alternatives":  # one block in several notations: the first
-            yield from _jats([c for c in child if tag_name(c)][:1], level)
+            yield from _jats([c for c in child if tag_name(c)][:1], level, src)
         elif blocks := [c for c in child if tag_name(c) in BLOCKS]:
-            if text := _inline(child):
-                yield text
-            yield from _jats(blocks, level)
-        elif text := _inline(child):
-            yield text
+            yield _fill(etree.Element("p"), child, BLOCKS)
+            yield from _jats(blocks, level, src)
+        else:
+            yield _fill(etree.Element("p"), child)
+
+
+def _figure_files(path: Path) -> Callable[[str], str]:
+    """The image of a figure the XML names: its file in `<stem>.fig/` beside the XML, where
+    `curation-fetch` saves the PMC figures (a TIFF as PNG: found by its name without
+    extension), as a path from the XML's directory; else the name the XML gives."""
+    folder = path.with_name(f"{path.stem}.fig")
+    files = {p.stem: f"{folder.name}/{p.name}" for p in folder.iterdir()} if folder.is_dir() else {}
+
+    def src(href: str) -> str:
+        name = Path(href).name
+        return files.get(Path(name).stem if Path(name).suffix.lower() in IMAGES else name, href)
+
+    return src
 
 
 def jats(path: Path) -> str:
@@ -230,18 +382,20 @@ def jats(path: Path) -> str:
         article = article.find(".//{*}article")
         if article is None:
             raise ParseError("XML without an article")
-    blocks: list[str] = []
+    src = _figure_files(path)
+    blocks: list[_Element] = []
     title = article.find("{*}front/{*}article-meta/{*}title-group/{*}article-title")
     if title is not None:
-        blocks.append("# " + _inline(title))
+        blocks.append(_fill(etree.Element("h1"), title, BLOCKS))
     meta = article.find("{*}front/{*}article-meta")
     if meta is not None:
-        blocks.extend(_jats([a for a in meta if tag_name(a) in ("abstract", "trans-abstract")], 2))
+        abstracts = [a for a in meta if tag_name(a) in ("abstract", "trans-abstract")]
+        blocks.extend(_jats(abstracts, 2, src))
     for part in ("body", "back", "floats-group"):
         el = article.find(f"{{*}}{part}")
         if el is not None:
-            blocks.extend(_jats(el, 2))
-    return "\n\n".join(b for b in blocks if b) + "\n"
+            blocks.extend(_jats(el, 2, src))
+    return html_text(blocks)
 
 
 # HTML
@@ -254,80 +408,129 @@ def class_names(el: _Element) -> set[str]:
     return set((el.get("class") or "").split())
 
 
-def _pmc_page(children: Iterable[_Element], level: int) -> Iterator[str]:
+def _pmc_page(children: Iterable[_Element], level: int) -> Iterator[_Element]:
     """The blocks of a PMC article page, its XML rendered as HTML: sections and their titles,
-    paragraphs, lists, figure and table captions, tables, supplementary materials."""
+    paragraphs, lists, figures with their images and captions, tables, supplementary
+    materials."""
     for child in children:
         tag, classes = tag_name(child), class_names(child)
+        images = [src for img in child.iter("img") if (src := img.get("src"))]
         if tag == "section":
             if classes & PMC_PAGE_DROPPED or (child.get("id") or "").startswith("notes"):
                 continue
             if "tw" in classes:  # a table
                 head = child.find("h4")
                 caption = child.find("div[@class='caption p']")
-                label = _text(head) if head is not None else "Table."
-                yield f"**{label}** {_text(caption) if caption is not None else ''}".rstrip()
-                yield from _tables(child.iter("table"))
+                found = _labelled("p", _text(head) if head is not None else "Table.")
+                if caption is not None:
+                    _add_text(found, " ")
+                    _fill(found, caption)
+                yield found
+                if tables := _top_tables(child):
+                    yield from (_html_table(t) for t in tables)
+                elif images:  # a table given as an image
+                    yield _figure(images, None)
                 for foot in child.iterfind(".//div"):
                     if "tw-foot" in class_names(foot):
-                        yield _text(foot)
+                        yield _fill(etree.Element("p"), foot)
             elif "sm" in classes:  # a supplementary material: its caption and file
                 links = [a.get("href", "") for a in child.iter("a")]
                 names = list(dict.fromkeys(Path(h).name for h in links if "/bin/" in h))
-                caption = _text(child, {"a", "sup"})
-                files = f"(file {', '.join(names)})" if names else ""
-                yield " ".join(x for x in ("**Supplementary material.**", caption, files) if x)
+                found = _labelled("p", "Supplementary material.")
+                _add_text(found, " ")
+                _fill(found, child, {"a", "sup"})
+                if names:
+                    _add_text(found, f" (file {', '.join(names)})")
+                yield found
             else:
                 title = next((h for h in child if tag_name(h) in ("h2", "h3", "h4", "h5")), None)
                 if title is not None and _text(title):
-                    yield "#" * min(level, 6) + " " + _text(title)
+                    yield _fill(etree.Element(f"h{min(level, 6)}"), title)
                 yield from _pmc_page(child, level + 1)
         elif tag == "figure":
             head = next((h for h in child if tag_name(h) in ("h3", "h4")), None)
-            caption = child.find("figcaption")
-            label = _text(head) if head is not None else "Figure."
-            yield f"**{label}** {_text(caption) if caption is not None else ''}".rstrip()
+            caption = _labelled("figcaption", _text(head) if head is not None else "Figure.")
+            if (text := child.find("figcaption")) is not None:
+                _add_text(caption, " ")
+                _fill(caption, text)
+            yield _figure(images, caption)
         elif tag in ("h2", "h3", "h4", "h5"):
             continue  # a section title, given with its section
         elif tag in ("ul", "ol"):
-            yield "\n".join(f"- {_text(item)}" for item in child.iterfind("li"))
+            yield _list(child)
         elif tag == "table":
-            yield markdown_table(_grid(child))
+            yield _html_table(child)
         elif tag in ("div", "dl") and any(
             tag_name(c) in ("p", "section", "figure", "table", "ul", "ol", "div") for c in child
         ):
             yield from _pmc_page(child, level)
-        elif text := _text(child):
-            yield text
+        elif _text(child):
+            yield _fill(etree.Element("p"), child)
 
 
 def pmc_page(doc: _Element, body: _Element) -> str:
     title = next(doc.iter("h1"), None)
-    blocks = ["# " + _text(title)] if title is not None else []
+    blocks = [_fill(etree.Element("h1"), title)] if title is not None else []
     blocks.extend(_pmc_page(body, 2))
-    return "\n\n".join(b for b in blocks if b) + "\n"
+    return html_text(blocks)
+
+
+def _cleaned(el: _Element) -> Iterator[_Element]:
+    """An element of trafilatura's HTML with only the tags and attributes of the HTML texts
+    (`TAGS`): another tag holding blocks gives them, else a paragraph of its content."""
+    tag = tag_name(el)
+    if tag in NEVER:
+        return
+    if tag in TAGS:
+        yield _clean_into(etree.Element(tag, _attributes(el, tag)), el)
+    elif any(tag_name(c) in TAGS and tag_name(c) not in ("b", "sup", "sub", "br") for c in el):
+        for child in el:
+            yield from _cleaned(child)
+    else:
+        yield _clean_into(etree.Element("p"), el)
+
+
+def _attributes(el: _Element, tag: str) -> dict[str, str]:
+    return {str(k): str(v) for k, v in el.attrib.items() if k in TAGS[tag]}
+
+
+def _clean_into(parent: _Element, el: _Element) -> _Element:
+    """The content of an element added to an HTML element, each tag of the HTML texts kept with
+    its attributes, any other cleaned away, its text kept."""
+    _add_text(parent, el.text or "")
+    for child in el:
+        tag = tag_name(child)
+        if tag in TAGS:
+            _clean_into(etree.SubElement(parent, tag, _attributes(child, tag)), child)
+        elif tag and tag not in NEVER:
+            _clean_into(parent, child)
+        _add_text(parent, child.tail or "")
+    return parent
 
 
 def html(path: Path) -> str:
-    """A PMC article page by its structure, as its XML; any other page by its main text."""
+    """A PMC article page by its structure, as its XML; any other page by its main text, as
+    trafilatura finds it, with its tables and its images."""
     raw = path.read_bytes()
     if b"main-article-body" in raw:
         doc = etree.fromstring(raw, etree.HTMLParser())
         for body in doc.iter("section"):
             if "main-article-body" in class_names(body):
                 return pmc_page(doc, body)
-    text = trafilatura.extract(
+    found = trafilatura.extract(
         raw,  # bytes: trafilatura finds the page's charset
-        output_format="markdown",
+        output_format="html",
         include_tables=True,
         include_comments=False,
-        include_images=False,
+        include_images=True,
         include_links=False,
+        include_formatting=True,  # superscripts and subscripts
         favor_recall=True,
     )
-    if not text:
+    body = etree.fromstring(found, etree.HTMLParser()).find("body") if found else None
+    if body is None or not _all_text(body).strip():
         raise ParseError("no main text in the HTML page")
-    return text + "\n"
+    return html_text(block for child in body for block in _cleaned(child))
 
 
 # PDF
@@ -447,27 +650,315 @@ def xls(path: Path) -> list[tuple[str, str]]:
     return sheets
 
 
-# Word
+# Word (.docx): its XML cleaned up
+
+# Word elements whose content is not the document's text: formatting (every `...Pr`), tracked
+# deletions, a field's code, the old form of an element Word also writes in a newer one, a
+# note's own mark, comment marks.
+WORD_LEFT_OUT = {
+    "del",
+    "delText",
+    "moveFrom",
+    "instrText",
+    "Fallback",
+    "footnoteRef",
+    "endnoteRef",
+    "commentReference",
+    "tblGrid",
+}
+# The Word elements that give content: a field's code hides them, never the runs around them,
+# which mark where the code ends.
+WORD_CONTENT = {
+    "t",
+    "tab",
+    "ptab",
+    "br",
+    "cr",
+    "noBreakHyphen",
+    "sym",
+    "blip",
+    "imagedata",
+    "footnoteReference",
+    "endnoteReference",
+    "tbl",
+    "p",
+}
+# The Symbol font: Word writes "IFN-γ" as "IFN-g" set in that font, or inserts the symbol by its
+# code in the font, from U+F000. Its Greek letters and the signs a publication uses.
+SYMBOL = {
+    **dict(zip("ABGDEZHQIKLMNXOPRSTUFCYW", "ΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩ", strict=True)),
+    **dict(zip("abgdezhqiklmnxoprstufcywjJvV", "αβγδεζηθικλμνξοπρστυφχψωϕϑϖς", strict=True)),
+    **dict(zip("-~@^\xa2\xa3\xa5\xab\xac\xad\xae\xaf", "−∼≅⊥′≤∞↔←↑→↓", strict=True)),
+    **dict(
+        zip("\xb0\xb1\xb2\xb3\xb4\xb5\xb6\xb7\xb8\xb9\xba\xbb\xbc", "°±″≥×∝∂•÷≠≡≈…", strict=True)
+    ),
+    **dict(zip("\xc6\xc7\xc8\xce\xd5\xd6\xd7\xdb\xde\xe5\xf2", "∅∩∪∈∏√⋅⇔⇒∑∫", strict=True)),
+}
+SYMBOL_CODES = str.maketrans({**SYMBOL, **{chr(0xF000 + ord(k)): v for k, v in SYMBOL.items()}})
+
+
+def _w(el: _Element | None, name: str) -> str:
+    """A Word attribute, by its name in any namespace; empty when it, or its element, is missing."""
+    if el is None:
+        return ""
+    return next((str(v) for k, v in el.attrib.items() if etree.QName(k).localname == name), "")
+
+
+def _child(el: _Element, path: str) -> _Element | None:
+    """A descendant by its tags, in any namespace (`pPr/pStyle`)."""
+    return el.find("/".join(f"{{*}}{t}" for t in path.split("/")))
+
+
+def _all(el: _Element | None, tag: str) -> list[_Element]:
+    """The descendants of an element with a tag, in any namespace."""
+    return [] if el is None else list(el.iter(f"{{*}}{tag}"))
+
+
+def _outline(el: _Element) -> int | None:
+    """The heading level an outline level gives (Word's 0 to 8; 9 is body text)."""
+    level = _w(_child(el, "pPr/outlineLvl"), "val")
+    return int(level) + 1 if level.isdigit() and int(level) < 9 else None
+
+
+@dataclass
+class _Docx:
+    """What the cleanup of a Word document reads besides its body."""
+
+    headings: dict[str, int]  # a paragraph style's heading level
+    lists: dict[str, int]  # a paragraph style's list level, for a style that numbers
+    images: dict[str, list[str]]  # an image's files beside the document, by its relationship
+    notes: dict[str, _Element]  # footnotes and endnotes, by `footnote <id>` or `endnote <id>`
+    referenced: list[str]  # the notes, in the order the text refers to them
+    fields: list[bool]  # the open fields of a paragraph, True while in their code
+
+
+def _numbering(el: _Element) -> int | None:
+    """The list level a paragraph or a style numbers at, if it numbers."""
+    numbering = _child(el, "pPr/numPr")
+    if numbering is None or _w(_child(numbering, "numId"), "val") in ("", "0"):
+        return None
+    return int(_w(_child(numbering, "ilvl"), "val") or 0)
+
+
+def _style_levels(styles: _Element | None) -> tuple[dict[str, int], dict[str, int]]:
+    """The heading level of each paragraph style that heads (`heading N`, `Title`, or an outline
+    level), and the list level of each that numbers."""
+    headings: dict[str, int] = {}
+    lists: dict[str, int] = {}
+    for style in _all(styles, "style"):
+        name, key = _w(_child(style, "name"), "val").lower(), _w(style, "styleId")
+        if m := re.fullmatch(r"heading (\d)", name):
+            headings[key] = int(m.group(1))
+        elif name == "title":
+            headings[key] = 1
+        elif level := _outline(style):
+            headings[key] = level
+        elif (level := _numbering(style)) is not None:
+            lists[key] = level
+    return headings, lists
+
+
+def _image_files(path: Path, rels: _Element | None) -> dict[str, list[str]]:
+    """The files of each image of a Word document, by its relationship: beside the document, as
+    `prepare` saves them (`<file>.<image>`, a TIFF as PNG, several for several frames), else its
+    path in the document."""
+    beside: dict[str, list[str]] = {}
+    for file in sorted(path.parent.iterdir()):
+        if file.name.startswith(f"{path.name}."):
+            beside.setdefault(re.sub(r"-\d+$", "", file.stem), []).append(file.name)
+    images: dict[str, list[str]] = {}
+    for rel in _all(rels, "Relationship"):
+        target = rel.get("Target") or ""
+        if target and rel.get("TargetMode") != "External":
+            saved = beside.get(Path(f"{path.name}.{Path(target).name}").stem)
+            images[rel.get("Id") or ""] = saved or [f"word/{target}"]
+    return images
+
+
+def _docx(path: Path, package: zipfile.ZipFile) -> tuple[_Element, _Docx]:
+    """A Word document's body, and what its cleanup reads besides."""
+    parser = etree.XMLParser(resolve_entities=False, no_network=True, huge_tree=True)
+    names = set(package.namelist())
+
+    def part(name: str) -> _Element | None:
+        return etree.fromstring(package.read(name), parser) if name in names else None
+
+    document = part("word/document.xml")
+    body = _child(document, "body") if document is not None else None
+    if body is None:
+        raise ParseError("a Word document without its body")
+    notes = {
+        f"{kind} {_w(note, 'id')}": note
+        for kind in ("footnote", "endnote")
+        for note in _all(part(f"word/{kind}s.xml"), kind)
+    }
+    headings, lists = _style_levels(part("word/styles.xml"))
+    images = _image_files(path, part("word/_rels/document.xml.rels"))
+    return body, _Docx(headings, lists, images, notes, [], [])
+
+
+def _word_level(paragraph: _Element, docx: _Docx) -> tuple[str, int]:
+    """A paragraph's kind, by its own properties, else its style's: a heading and its level, a
+    list item and its level, else a paragraph."""
+    style = _w(_child(paragraph, "pPr/pStyle"), "val")
+    if level := _outline(paragraph) or docx.headings.get(style):
+        return "h", min(level, 6)
+    if (level := _numbering(paragraph)) is not None or (level := docx.lists.get(style)) is not None:
+        return "li", level
+    return "p", 0
+
+
+def _word_inline(parent: _Element, el: _Element, docx: _Docx, symbol: bool = False) -> _Element:
+    """The content of a Word element added to an HTML element: its text (in the Symbol font, as
+    the characters it shows), its superscripts and subscripts, its images, the text of its text
+    boxes, its tables, the results of its fields, references to its notes; its formatting
+    cleaned away. Returns the HTML element."""
+    for child in el:
+        tag = tag_name(child)
+        if not tag or tag in WORD_LEFT_OUT or tag.endswith("Pr"):
+            continue
+        if tag == "fldChar":  # a field: its code, then its result
+            kind = _w(child, "fldCharType")
+            if kind == "begin":
+                docx.fields.append(True)
+            elif kind == "separate" and docx.fields:
+                docx.fields[-1] = False
+            elif kind == "end" and docx.fields:
+                docx.fields.pop()
+        elif any(docx.fields) and tag in WORD_CONTENT:  # a field's code
+            continue
+        elif tag == "t":
+            _add_text(parent, (child.text or "").translate(SYMBOL_CODES if symbol else {}))
+        elif tag in ("tab", "ptab"):
+            _add_text(parent, " ")
+        elif tag in ("br", "cr"):
+            if _w(child, "type") in ("page", "column"):
+                _add_text(parent, " ")
+            else:
+                etree.SubElement(parent, "br")
+        elif tag == "noBreakHyphen":
+            _add_text(parent, "-")
+        elif tag == "sym" and (code := _w(child, "char")):
+            value = chr(int(code, 16))
+            _add_text(
+                parent, value.translate(SYMBOL_CODES) if _w(child, "font") == "Symbol" else value
+            )
+        elif tag == "r":
+            align = _w(_child(child, "rPr/vertAlign"), "val")
+            script = {"superscript": "sup", "subscript": "sub"}.get(align)
+            fonts = _child(child, "rPr/rFonts")
+            in_symbol = "Symbol" in (_w(fonts, "ascii"), _w(fonts, "hAnsi"), _w(fonts, "cs"))
+            target = etree.SubElement(parent, script) if script else parent
+            _word_inline(target, child, docx, in_symbol)
+        elif tag in ("blip", "imagedata"):
+            for src in docx.images.get(_w(child, "embed") or _w(child, "id"), []):
+                etree.SubElement(parent, "img", src=src)
+        elif tag in ("footnoteReference", "endnoteReference"):
+            note = f"{tag.removesuffix('Reference')} {_w(child, 'id')}"
+            if note in docx.notes:
+                if note not in docx.referenced:
+                    docx.referenced.append(note)
+                etree.SubElement(parent, "sup").text = str(docx.referenced.index(note) + 1)
+        elif tag == "tbl":
+            parent.append(_word_table(child, docx))
+        elif tag == "p":  # a paragraph in a cell or a text box
+            _add_text(parent, " ")
+            _word_inline(parent, child, docx)
+            _add_text(parent, " ")
+        else:  # a run's container, a text box, a content control, a link, an insertion...
+            _word_inline(parent, child, docx)
+    return parent
+
+
+def _word_table(tbl: _Element, docx: _Docx) -> _Element:
+    """A Word table: its rows and cells, a cell spanning columns (`gridSpan`) as `colspan`, cells
+    merged down a column (`vMerge`) as one with its `rowspan`, a table in a cell kept in it."""
+    table = etree.Element("table")
+    above: dict[int, _Element] = {}  # by grid column, the cell a merge down the column starts
+    for tr in (r for r in tbl.iter("{*}tr") if r.getparent() is tbl or _owner(r) is tbl):
+        row = etree.SubElement(table, "tr")
+        column = int(_w(_child(tr, "trPr/gridBefore"), "val") or 0)
+        for tc in (c for c in tr.iter("{*}tc") if _owner(c) is tr):
+            span = max(int(_w(_child(tc, "tcPr/gridSpan"), "val") or 1), 1)
+            merge = _child(tc, "tcPr/vMerge")
+            if merge is not None and _w(merge, "val") != "restart" and column in above:
+                cell = above[column]
+                cell.set("rowspan", str(int(cell.get("rowspan") or 1) + 1))
+            else:
+                cell = etree.SubElement(row, "td", {"colspan": str(span)} if span > 1 else {})
+                _word_inline(cell, tc, docx)
+                if merge is not None:
+                    above[column] = cell
+                else:
+                    above.pop(column, None)
+            column += span
+    return table
+
+
+def _owner(el: _Element) -> _Element | None:
+    """The row or table an element of a table belongs to, past the content controls around it."""
+    parent = el.getparent()
+    while parent is not None and tag_name(parent) not in ("tr", "tbl"):
+        parent = parent.getparent()
+    return parent
+
+
+def _word_blocks(el: _Element, docx: _Docx) -> list[_Element]:
+    """The blocks of a Word body: its paragraphs and headings, its lists (numbered paragraphs,
+    nested by level), its tables, those of its content controls."""
+    blocks: list[_Element] = []
+    lists: list[_Element] = []  # the open lists, by level
+    for child in el:
+        tag = tag_name(child)
+        if not tag or tag in WORD_LEFT_OUT or tag.endswith("Pr"):
+            continue
+        if tag == "p":
+            kind, level = _word_level(child, docx)
+            docx.fields.clear()
+            block = _word_inline(etree.Element(f"h{level}" if kind == "h" else kind), child, docx)
+            if kind != "li":
+                lists.clear()
+                blocks.append(block)
+                continue
+            del lists[level + 1 :]
+            while len(lists) <= level:
+                nested = etree.Element("ul")
+                if lists:
+                    if not len(lists[-1]):
+                        etree.SubElement(lists[-1], "li")
+                    lists[-1][-1].append(nested)
+                else:
+                    blocks.append(nested)
+                lists.append(nested)
+            lists[level].append(block)
+        elif tag == "tbl":
+            lists.clear()
+            blocks.append(_word_table(child, docx))
+        else:  # a content control, an insertion...: its blocks
+            lists.clear()
+            blocks.extend(_word_blocks(child, docx))
+    return blocks
 
 
 def word(path: Path) -> str:
-    document = docx.Document(str(path))
-    blocks: list[str] = []
-    body = cast(_Element, document.element.body)  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType]
-    for el in body.iterchildren():
-        tag = etree.QName(el).localname
-        if tag == "p":
-            paragraph = Paragraph(cast(Any, el), document)
-            text = one_line(paragraph.text)
-            style = paragraph.style.name if paragraph.style is not None else ""
-            if text and (m := re.match(r"Heading (\d)", style or "")):
-                blocks.append("#" * int(m.group(1)) + " " + text)
-            elif text:
-                blocks.append(text)
-        elif tag == "tbl":
-            rows = [[c.text for c in row.cells] for row in Table(cast(Any, el), document).rows]
-            blocks.append(markdown_table(rows))
-    return "\n\n".join(blocks) + "\n"
+    """A Word document (`.docx`), its XML cleaned up to HTML, read in its order: its paragraphs,
+    headings and lists, its tables, its images where they stand, the text of its text boxes, its
+    content controls and its tracked insertions (its deletions left out), the results of its
+    fields (their code left out), its footnotes and endnotes at the end; its formatting, headers,
+    footers and comments left out. An element it does not know keeps its text."""
+    try:
+        package = zipfile.ZipFile(path)
+    except zipfile.BadZipFile as e:
+        raise ParseError(f"not a Word document: {e}") from e
+    with package:
+        body, docx = _docx(path, package)
+        blocks = _word_blocks(body, docx)
+    for n, note in enumerate(docx.referenced, 1):
+        paragraph = etree.Element("p")
+        etree.SubElement(paragraph, "sup").text = str(n)
+        _add_text(paragraph, " ")
+        blocks.append(_word_inline(paragraph, docx.notes[note], docx))
+    return html_text(blocks)
 
 
 # Old Word documents (Word 97-2003, [MS-DOC])
@@ -630,26 +1121,25 @@ def _word_document(path: Path) -> tuple[str, list[int], list[tuple[int, int, _Pr
     return "".join(chars), offsets, _paragraphs(document, table, data, fc_lcb)
 
 
-def _aligned(rows: list[tuple[list[str], tuple[int, ...]]]) -> list[list[str]]:
+def _aligned(rows: list[tuple[list[str], tuple[int, ...]]]) -> _Element:
     """The rows of one table, aligned. A cell spanning several columns is one wider cell in
     Word: in a row with fewer cells than the fullest row, each cell is placed by its edges on the
-    nearest edges of the fullest row, its value repeated over the columns it spans."""
+    nearest edges of the fullest row, its span the columns it covers."""
     grid = max((edges for _, edges in rows), key=len, default=())
-    aligned: list[list[str]] = []
+    table = etree.Element("table")
     for cells, edges in rows:
+        spans = [1] * len(cells)
         if len(cells) < len(grid) - 1 and len(edges) == len(cells) + 1:
             column = [min(range(len(grid)), key=lambda k: abs(grid[k] - e)) for e in edges]
-            cells = [
-                c
-                for c, a, b in zip(cells, column, column[1:], strict=False)
-                for _ in range(max(b - a, 1))
-            ]
-        aligned.append(cells)
-    return aligned
+            spans = [max(b - a, 1) for a, b in zip(column, column[1:], strict=False)]
+        row = etree.SubElement(table, "tr")
+        for cell, span in zip(cells, spans, strict=False):
+            etree.SubElement(row, "td", {"colspan": str(span)} if span > 1 else {}).text = cell
+    return table
 
 
 def doc(path: Path) -> str:
-    """An old Word document, as Markdown like a .docx: its paragraphs, and its tables. Each mark
+    """An old Word document, as HTML: its paragraphs, and its tables. Each mark
     that ends a paragraph (a carriage return, a cell mark in a table, a page or section break)
     is read with its paragraph's properties: in a table or not, the end of a cell or of a row. A
     nested table's cells are flattened into the cell holding them."""
@@ -662,7 +1152,7 @@ def doc(path: Path) -> str:
             return paragraphs[k][2]
         return _Properties({})
 
-    blocks: list[str] = []
+    blocks: list[_Element] = []
     table: list[tuple[list[str], tuple[int, ...]]] = []  # the rows of the current table
     row: list[str] = []
     current: list[str] = []
@@ -672,8 +1162,11 @@ def doc(path: Path) -> str:
         nonlocal table, row, current
         if row:  # cells whose row end was not found: kept, never lost
             table.append((row, ()))
-        blocks.append(markdown_table(_aligned(table)))
-        blocks.append(one_line("".join(current)))
+        if table:
+            blocks.append(_aligned(table))
+        paragraph = etree.Element("p")
+        paragraph.text = one_line("".join(current))
+        blocks.append(paragraph)
         table, row, current = [], [], []
 
     fields: list[bool] = []  # open fields, True while in their code (hidden)
@@ -711,19 +1204,119 @@ def doc(path: Path) -> str:
         else:
             current.append(char)
     end_paragraph()
-    return "\n\n".join(b for b in blocks if b) + "\n"
+    return html_text(blocks)
 
 
-# The converters of each file type, with the extension of the text they give: Markdown, or
-# a PDF's plain text.
+# Downloaded files made ready to read
+
+# Documents that are zip archives, and the folder of the images each holds.
+DOCUMENT_MEDIA = {
+    ".docx": "word/media/",
+    ".xlsx": "xl/media/",
+    ".xlsm": "xl/media/",
+    ".pptx": "ppt/media/",
+}
+# Videos: no curation reads them.
+VIDEOS = {".mp4", ".mov", ".avi", ".wmv", ".mpg", ".mpeg", ".m4v", ".webm"}
+# Images are read as they are, never converted to text.
+IMAGES = {".tif", ".tiff", ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".eps", ".svg", ".webp"}
+# Images the Read tool cannot open, saved as PNG.
+TO_PNG = {".tif", ".tiff", ".bmp"}
+
+
+def _safe_name(name: str, taken: set[str]) -> str:
+    """A file name with no path and no odd character, unique in the directory."""
+    name = re.sub(r"[^\w.-]", "_", name).lstrip(".") or "file"
+    stem, suffix, n = Path(name).stem, Path(name).suffix, 1
+    while name in taken:
+        n += 1
+        name = f"{stem}_{n}{suffix}"
+    taken.add(name)
+    return name
+
+
+def save(folder: Path, name: str, body: bytes) -> Path:
+    """A file saved in the folder under a name no other file there has."""
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / _safe_name(name, {p.name for p in folder.iterdir()})
+    path.write_bytes(body)
+    return path
+
+
+def is_image(path: Path) -> bool:
+    return path.suffix.lower() in IMAGES
+
+
+def is_video(name: str) -> bool:
+    """A video, or an archive named as videos (`movies_s1_to_s3.zip`)."""
+    return Path(name).suffix.lower() in VIDEOS or re.search(r"movie|video", name, re.I) is not None
+
+
+def as_png(name: str, body: bytes) -> list[tuple[str, bytes]]:
+    """A TIFF or a BMP image as PNG, in RGB (a TIFF can be CMYK), one file per image it holds
+    (`<name>-<n>.png` when several); none when it cannot be opened."""
+    try:
+        document = pymupdf.open(stream=body)
+    except pymupdf.FileDataError:
+        return []
+    with document:  # one page per image, its image at its own resolution
+        blocks = [
+            block
+            for page in document
+            for block in cast(dict[str, Any], page.get_text("dict"))["blocks"]  # pyright: ignore[reportUnknownMemberType]
+            if block["type"] == 1
+        ]
+    images = [
+        cast(bytes, pymupdf.Pixmap(pymupdf.csRGB, pymupdf.Pixmap(b["image"])).tobytes("png"))
+        for b in blocks
+    ]
+    stem = Path(name).stem
+    if len(images) > 1:
+        return [(f"{stem}-{n}.png", image) for n, image in enumerate(images, 1)]
+    return [(f"{stem}.png", image) for image in images]
+
+
+def prepare(base: Path, file: str) -> list[str]:
+    """A downloaded file, at a path relative to `base`, made ready to read: a TIFF or a BMP image
+    replaced by its PNG (`as_png`), kept as it is when it cannot be opened; a document that is a
+    zip archive (`DOCUMENT_MEDIA`) kept, each image it holds but its videos saved beside it,
+    `<file>.<image>`, and made ready likewise. Returns the files to list, paths relative to
+    `base`: the file, or its PNG, then a document's images."""
+    path = base / file
+    suffix = path.suffix.lower()
+    if suffix in TO_PNG:
+        images = as_png(path.name, path.read_bytes())
+        if not images:
+            return [file]
+        path.unlink()
+        return [str(Path(file).with_name(save(path.parent, n, c).name)) for n, c in images]
+    ready = [file]
+    if suffix not in DOCUMENT_MEDIA:
+        return ready
+    try:
+        document = zipfile.ZipFile(path)
+    except zipfile.BadZipFile:
+        return ready
+    with document:
+        for info in document.infolist():
+            image = Path(info.filename).name
+            media = info.filename.startswith(DOCUMENT_MEDIA[suffix]) and not info.is_dir()
+            if media and not is_video(image):
+                saved = save(path.parent, f"{path.name}.{image}", document.read(info))
+                ready += prepare(base, str(Path(file).with_name(saved.name)))
+    return ready
+
+
+# The converters of each file type, with the extension of the text they give: HTML, or a PDF's
+# plain text.
 CONVERTERS: dict[str, tuple[Callable[[Path], str], str]] = {
-    ".xml": (jats, ".md"),
-    ".nxml": (jats, ".md"),
-    ".html": (html, ".md"),
-    ".htm": (html, ".md"),
+    ".xml": (jats, ".html"),
+    ".nxml": (jats, ".html"),
+    ".html": (html, ".html"),
+    ".htm": (html, ".html"),
     ".pdf": (pdf, ".txt"),
-    ".docx": (word, ".md"),
-    ".doc": (doc, ".md"),
+    ".docx": (word, ".html"),
+    ".doc": (doc, ".html"),
 }
 # Spreadsheets: each sheet's name and rows, one TSV text per sheet.
 SPREADSHEETS: dict[str, Callable[[Path], list[tuple[str, str]]]] = {
@@ -843,6 +1436,26 @@ def convert(base: Path, file: str) -> dict[str, Any]:
     return {"file": file, "text": text, "bytes": _write(base / text, content)}
 
 
+def entry(base: Path, file: str) -> dict[str, Any]:
+    """A file's entry of the manifest, at a path relative to `base`: its texts (`convert`); an
+    image, or a file that cannot be converted, its `file` alone, why in `not_converted`, which
+    the manifest leaves out."""
+    if is_image(Path(file)):
+        return {"file": file}
+    try:
+        return convert(base, file)
+    except ParseError as e:
+        return {"file": file, "not_converted": str(e)}
+
+
+def entries(base: Path, file: str) -> list[dict[str, Any]]:
+    """A downloaded file, at a path relative to `base`, made ready to read (`prepare`), then the
+    entry of each file it gives: the file's, or its PNG's, then its images'."""
+    if not (base / file).is_file():
+        raise ParseError("no such file")
+    return [entry(base, ready) for ready in prepare(base, file)]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -853,9 +1466,15 @@ def main() -> None:
     refused = False
     for file in args.files:
         try:
-            print(json.dumps(convert(args.dir, file), ensure_ascii=False))
+            found = entries(args.dir, file)
         except ParseError as e:
             print(f"{file}: not converted, {e}", file=sys.stderr)
             refused = True
+            continue
+        for x in found:
+            if why := x.pop("not_converted", None):
+                print(f"{x['file']}: not converted, {why}", file=sys.stderr)
+                refused = True
+            print(json.dumps(x, ensure_ascii=False))
     if refused:
         sys.exit(1)

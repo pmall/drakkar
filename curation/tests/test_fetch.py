@@ -6,9 +6,11 @@ import io
 import json
 import zipfile
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
+import docx
 import openpyxl
+import pymupdf
 import pytest
 
 from curation.fetch import (
@@ -114,8 +116,8 @@ def outcomes(report: dict[str, Any]) -> dict[str, str]:
 def test_pmc_open_access_files(tmp_path: Path):
     """The article, its XML alone; videos and the Reporting Summary skipped, never asked; the
     article's figures, the other images of the files, saved; a TIFF as PNG. Each file but an
-    image converted, the manifest listing those the curation can use: not a file that cannot be
-    converted, which the report gives with why."""
+    image converted, the manifest listing every file: one that cannot be converted by its file
+    alone, the report giving why."""
     report, server = run(
         tmp_path,
         {
@@ -141,7 +143,7 @@ def test_pmc_open_access_files(tmp_path: Path):
     assert report["missing_supplements"] == []
     assert report["file"] == f"{PMID}.xml"
     assert not (tmp_path / f"{PMID}.pdf").exists()
-    assert (tmp_path / f"{PMID}.xml.md").read_text().startswith("Text\n")
+    assert (tmp_path / f"{PMID}.xml.html").read_text().startswith("<p>Text</p>\n")
     assert report["supplements"] == [
         {
             "name": "s1.xlsx",
@@ -155,10 +157,13 @@ def test_pmc_open_access_files(tmp_path: Path):
             "url": f"{PMC_AWS}/PMC9.2/fig_s1.tif",
         },
     ]
-    size = (tmp_path / f"{PMID}.xml.md").stat().st_size
+    size = (tmp_path / f"{PMID}.xml.html").stat().st_size
     assert json.loads((tmp_path / "manifest.json").read_text()) == {
-        "article": {"file": f"{PMID}.xml", "text": f"{PMID}.xml.md", "bytes": size},
-        "supplements": [{"name": "fig_s1.tif", "file": f"{PMID}.supp/fig_s1.png"}],
+        "article": {"file": f"{PMID}.xml", "text": f"{PMID}.xml.html", "bytes": size},
+        "supplements": [
+            {"name": "s1.xlsx", "file": f"{PMID}.supp/s1.xlsx"},
+            {"name": "fig_s1.tif", "file": f"{PMID}.supp/fig_s1.png"},
+        ],
         "figures": [f"{PMID}.fig/g001.jpg"],
     }
     assert (tmp_path / f"{PMID}.fig" / "g001.jpg").read_bytes() == b"\xff\xd8"
@@ -194,6 +199,49 @@ def test_supplement_archive_is_unpacked(tmp_path: Path):
     assert [s["file"] for s in report["supplements"]] == [f"{PMID}.supp/s1.xlsx"]
     assert (tmp_path / f"{PMID}.supp" / "s1.xlsx").read_text() == "cells"
     assert report["missing_supplements"] == []
+
+
+def test_document_images_are_saved_beside_it(tmp_path: Path):
+    """A Word document: kept and converted, each image it holds saved beside it (a TIFF as PNG)
+    and listed under its name."""
+    document = docx.Document()
+    document.add_paragraph("Figure S1. NS1 co-precipitates TRIM25.")
+    pixmap = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 2, 2), False)
+    png = cast(bytes, pixmap.tobytes("png"))
+    document.add_picture(io.BytesIO(png))
+    document.add_picture(io.BytesIO(TIFF))
+    body = io.BytesIO()
+    document.save(body)
+    xml = (
+        b'<article xmlns:xlink="http://www.w3.org/1999/xlink"><body>'
+        b'<supplementary-material xlink:href="s1.docx"/></body></article>'
+    )
+    run(
+        tmp_path,
+        {
+            SEARCH: found(),
+            WORK: json_ok({}),
+            f"{PMC_AWS}/?list-type=2&prefix=PMC9.": listing("PMC9.1/PMC9.1.xml", "PMC9.1/s1.docx"),
+            f"{PMC_AWS}/PMC9.1/PMC9.1.xml": ok(xml),
+            f"{PMC_AWS}/PMC9.1/s1.docx": ok(body.getvalue()),
+        },
+    )
+    supp = tmp_path / f"{PMID}.supp"
+    text = (supp / "s1.docx.html").stat().st_size
+    assert json.loads((tmp_path / "manifest.json").read_text())["supplements"] == [
+        {
+            "name": "s1.docx",
+            "file": f"{PMID}.supp/s1.docx",
+            "text": f"{PMID}.supp/s1.docx.html",
+            "bytes": text,
+        },
+        {"name": "s1.docx", "file": f"{PMID}.supp/s1.docx.image1.png"},
+        {"name": "s1.docx", "file": f"{PMID}.supp/s1.docx.image2.png"},
+    ]
+    assert (supp / "s1.docx.image1.png").read_bytes() == png
+    html = (supp / "s1.docx.html").read_text()
+    assert '<img src="s1.docx.image1.png">' in html and '<img src="s1.docx.image2.png">' in html
+    assert (supp / "s1.docx.image2.png").read_bytes().startswith(PNG)
 
 
 def test_europe_pmc_xml_and_its_supplementary_files_service(tmp_path: Path):
@@ -455,11 +503,11 @@ def test_manifest_lists_the_converted_files(tmp_path: Path):
         f"{PMC_AWS}/PMC9.1/s2.xlsx": ok(workbook.getvalue()),
     }
     report, _ = run(tmp_path, responses)
-    size = (tmp_path / f"{PMID}.xml.md").stat().st_size
+    size = (tmp_path / f"{PMID}.xml.html").stat().st_size
     s1 = {"name": "s1.csv", "file": f"{PMID}.supp/s1.csv", "text": f"{PMID}.supp/s1.csv"}
     s2 = f"{PMID}.supp/s2.xlsx"
     assert json.loads((tmp_path / "manifest.json").read_text()) == {
-        "article": {"file": f"{PMID}.xml", "text": f"{PMID}.xml.md", "bytes": size},
+        "article": {"file": f"{PMID}.xml", "text": f"{PMID}.xml.html", "bytes": size},
         "supplements": [
             s1 | {"bytes": 8},  # a,b\n1,2\n
             {
@@ -483,9 +531,9 @@ def test_manifest_lists_the_converted_files(tmp_path: Path):
     assert report_lines(report) == ["Full text: PMC9 (no license given)"]
 
 
-def test_no_manifest_when_the_article_cannot_be_converted(tmp_path: Path):
-    """A scanned or damaged PDF: the curation cannot start; a manifest left by an earlier fetch
-    is removed."""
+def test_article_that_cannot_be_converted_is_listed_by_its_file(tmp_path: Path):
+    """A scanned or damaged PDF: the manifest lists it by its file alone, the report gives why;
+    a manifest left by an earlier fetch is replaced."""
     (tmp_path / "manifest.json").write_text("{}")
     pdf = "https://repo.org/record/1.pdf"
     report, _ = run(
@@ -497,7 +545,11 @@ def test_no_manifest_when_the_article_cannot_be_converted(tmp_path: Path):
         },
     )
     assert report["file"] == f"{PMID}.pdf"
-    assert not (tmp_path / "manifest.json").exists()
+    assert json.loads((tmp_path / "manifest.json").read_text()) == {
+        "article": {"file": f"{PMID}.pdf"},
+        "supplements": [],
+        "figures": [],
+    }
     assert report_lines(report)[1].startswith(f"  {PMID}.pdf: not converted, ")
 
 
@@ -648,6 +700,23 @@ def test_download_saves_each_image_of_a_tiff_as_png(tmp_path: Path):
         str(tmp_path / "fig_s1-2.png"),
     ]
     assert (tmp_path / "fig_s1-2.png").read_bytes().startswith(PNG)
+
+
+def test_download_saves_the_images_of_a_presentation(tmp_path: Path):
+    """A presentation: kept, though no text is made of it, its images saved beside it, its
+    videos left out."""
+    pptx = io.BytesIO()
+    with zipfile.ZipFile(pptx, "w") as z:
+        z.writestr("ppt/slides/slide1.xml", "<p:sld/>")
+        z.writestr("ppt/media/image1.png", PNG)
+        z.writestr("ppt/media/media1.mp4", "frames")
+    url = "https://journal.org/suppl/s1.pptx"
+    lines = download(tmp_path, url, Server({url: ok(pptx.getvalue())}))
+    assert lines == [
+        f"{tmp_path / 's1.pptx'}: not converted, no converter for .pptx",
+        json.dumps({"file": str(tmp_path / "s1.pptx.image1.png")}),
+    ]
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["s1.pptx", "s1.pptx.image1.png"]
 
 
 def test_download_names_the_type_from_the_response(tmp_path: Path):
