@@ -4,15 +4,13 @@ The biological rules of curation, explained: what is curated, and how each value
 
 ## Principles
 
-Curation follows five principles, and every rule below derives from them:
+Every rule below derives from five principles, which also decide any case no rule decides:
 
 1. Two proteins are considered to interact whenever an experiment detects an affinity between them.
 2. The results are taken as the authors present them.
 3. Each protein the experiment tested is assigned the UniProt entry that best represents it.
 4. The sequences the experiment used are aligned as mappings on the assigned entry.
 5. What the publication shows that the descriptions cannot hold is written in the notes.
-
-A case no rule decides is decided by these principles.
 
 ## The publication
 
