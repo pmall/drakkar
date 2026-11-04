@@ -22,7 +22,7 @@ Every rule below derives from five principles, which also decide any case no rul
 
 ## Work
 
-The message gives the publication's directory, `dir`, and its `pmid`. The two output files, `descriptions.jsonl` and `curation.txt`, go at the root of `<dir>`, and everything else you write or download, temporary files included, goes in `<dir>/work/`. Never use a shared scratchpad: other curators work in parallel on other publications.
+The message gives the publication's directory, `dir`, and its `pmid`. The two output files, `descriptions.jsonl` and `curation.txt`, go at the root of `<dir>`, and everything else you write or download, temporary files included, goes in `<dir>/work/`. Never use a shared scratchpad: other curators work in parallel on other publications. Never `cd`: `uv run` finds the commands only from the directory you start in. Write each path from `<dir>` instead, as in `<dir>/manifest.json`.
 
 Read only what the curation needs, each file once, noting what you need as you go, and filter long outputs (a downloaded record, a long answer) to what you need. Run every lookup the curation needs, and save tool calls by grouping them, never by leaving one out:
 
