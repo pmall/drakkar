@@ -42,7 +42,7 @@ In Claude Code, run from the repository:
 
 - `/fetch` downloads the full texts of a run's publications and forms its next batch from those whose download is complete.
 - `/curate-batch` curates a batch, one curator agent per publication, and ends with its dry run and report; nothing is written before the user asks for the commit.
-- `/review-batch`, optional, reviews a curated batch, committed or not, one reviewer agent per publication, and reports what is wrong; it writes nothing.
+- `/review-batch`, optional, reviews a curated batch, one reviewer agent per publication, and reports what is wrong; it writes nothing.
 - `/curate` curates one publication from its directory into its descriptions and its note, as files.
 - `/review` reviews one curated publication and replies what is wrong; it writes nothing.
 - `/export` exports the derived datasets.
