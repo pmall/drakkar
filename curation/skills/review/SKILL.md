@@ -15,7 +15,7 @@ The message gives the publication's directory, `dir`, and its `pmid`. Never `cd`
 - `<dir>/curation.txt`: the publication note. Its first word is the state: `CURATED`, or `SELECTED` when a relevant file could not be had. The rest explains the curator's choices for the publication: the pairs not kept and why, the files downloaded or not.
 - `<dir>/manifest.json`: the files of the full text, their paths relative to `<dir>`: the `article`, the `supplements`, each under the `name` the article gives it, and `figures`. Each file has its original, `file`, and, when it could be converted, its text, `text`, of `bytes` in size; a spreadsheet has `sheets` instead, each with its `sheet` name, `text` and `bytes`.
 
-Read the descriptions, the note, then the article's text whole. Read any other file only where a description or the note points to it, or where the article shows something the descriptions may have missed. A text over 50 kB is never read whole: take what you need with `grep`. Read a figure, an image or a PDF page (Read with `pages`) only when you need what it shows.
+Read the article's text and the note whole, whatever their size, then the descriptions. Read any other file only where a description or the note points to it, or where the article shows something the descriptions may have missed. Over 50 kB, the descriptions and any other file are never read whole: take what you need with `grep`. Read a figure, an image or a PDF page (Read with `pages`) only when you need what it shows.
 
 ## Lookups
 
