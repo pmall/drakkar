@@ -2,6 +2,8 @@
 network). The pages in `samples/fetch/` are real responses cut to what the routes read."""
 
 import argparse
+import dataclasses
+import email.message
 import io
 import json
 import zipfile
@@ -16,6 +18,7 @@ import pytest
 from curation.fetch import (
     EFETCH,
     EUROPE_PMC,
+    LIMIT,
     OPENALEX,
     PMC_AWS,
     PMC_PAGE,
@@ -23,6 +26,7 @@ from curation.fetch import (
     Response,
     download,
     fetch,
+    http_get,
     parse_args,
     pmcids,
     report_lines,
@@ -79,16 +83,23 @@ def no_configuration(monkeypatch: pytest.MonkeyPatch):
 
 
 class Server:
-    """The responses by URL, and every request made."""
+    """The responses by URL, and every request made, with the limit it asked."""
 
     def __init__(self, responses: dict[str, Response]) -> None:
         self.responses = responses
         self.asked: list[str] = []
+        self.limits: dict[str, int | None] = {}
 
-    def __call__(self, url: str) -> Response:
+    def __call__(self, url: str, limit: int | None = None) -> Response:
         self.asked.append(url)
+        self.limits[url] = limit
         r = self.responses.get(url, Response(url, 404, "", b""))
-        return Response(r.url or url, r.status, r.content_type, r.body)
+        return dataclasses.replace(r, url=r.url or url)
+
+
+def too_large(size: int | None = 1_300_000_000) -> Response:
+    """A response over the limit asked, not read."""
+    return Response("", 200, "application/zip", b"", over_limit=True, size=size)
 
 
 def run(tmp_path: Path, responses: dict[str, Response]) -> tuple[dict[str, Any], Server]:
@@ -275,6 +286,125 @@ def test_europe_pmc_xml_and_its_supplementary_files_service(tmp_path: Path):
     assert missing["name"] == "s3.pdf" and missing["caption"] == "Table S3"
     assert [t["url"] for t in missing["tried"]] == [f"{EUROPE_PMC}/PMC9/supplementaryFiles"]
     assert server.asked.count(f"{EUROPE_PMC}/PMC9/supplementaryFiles") == 1
+
+
+def test_supplement_over_the_limit_is_not_downloaded(tmp_path: Path):
+    """A supplementary file over the limit: not downloaded, no other route tried for it, no
+    figure made of it, absent from the manifest and reported, its size when announced; the
+    download complete without it. The article is asked with no limit."""
+    xml = (
+        b'<article xmlns:xlink="http://www.w3.org/1999/xlink"><body><p>Text</p>'
+        b'<supplementary-material xlink:href="s1.xlsx"/>'
+        b'<supplementary-material xlink:href="images.zip"/>'
+        b'<supplementary-material xlink:href="stack.tif"/></body></article>'
+    )
+    report, server = run(
+        tmp_path,
+        {
+            SEARCH: found(license="cc by"),
+            WORK: json_ok({}),
+            f"{PMC_AWS}/?list-type=2&prefix=PMC9.": listing(
+                "PMC9.1/PMC9.1.xml", "PMC9.1/s1.xlsx", "PMC9.1/images.zip", "PMC9.1/stack.tif"
+            ),
+            f"{PMC_AWS}/PMC9.1/PMC9.1.xml": ok(xml),
+            f"{PMC_AWS}/PMC9.1/s1.xlsx": ok(b"cells"),
+            f"{PMC_AWS}/PMC9.1/images.zip": too_large(),
+            f"{PMC_AWS}/PMC9.1/stack.tif": too_large(None),
+        },
+    )
+    assert report["line"] == (
+        "Full text: PMC9 (cc by), supplementary files over 100 MB: images.zip, stack.tif"
+    )
+    assert report["missing_supplements"] == []
+    assert report["figures"] == []
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    assert [s["name"] for s in manifest["supplements"]] == ["s1.xlsx"]
+    assert report_lines(report)[1:] == [
+        "  s1.xlsx: not converted, cannot be read: BadZipFile: File is not a zip file",
+        f"  images.zip: over 100 MB (1,240 MB), not downloaded, {PMC_AWS}/PMC9.1/images.zip",
+        f"  stack.tif: over 100 MB, not downloaded, {PMC_AWS}/PMC9.1/stack.tif",
+    ]
+    assert server.asked.count(f"{PMC_AWS}/PMC9.1/stack.tif") == 1  # never again as a figure
+    assert f"{EUROPE_PMC}/PMC9/supplementaryFiles" not in server.asked  # not missing
+    assert server.limits[f"{PMC_AWS}/PMC9.1/PMC9.1.xml"] is None
+    assert server.limits[f"{PMC_AWS}/PMC9.1/s1.xlsx"] == LIMIT
+
+
+def test_europe_pmc_archive_over_the_limit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Europe PMC's archive: asked with the limit; a file of it over the limit not read."""
+    monkeypatch.setattr("curation.fetch.LIMIT", 6)
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, "w") as z:
+        z.writestr("s1.xlsx", "cells")
+        z.writestr("fig_s1.png", "pixels!")
+    report, server = run(
+        tmp_path,
+        {
+            SEARCH: found(),
+            WORK: json_ok({}),
+            f"{PMC_AWS}/?list-type=2&prefix=PMC9.": listing(),
+            f"{EUROPE_PMC}/PMC9/fullTextXML": ok(XML),
+            f"{EUROPE_PMC}/PMC9/supplementaryFiles": ok(archive.getvalue(), "application/zip"),
+        },
+    )
+    url = f"{EUROPE_PMC}/PMC9/supplementaryFiles"
+    assert server.limits[url] == 6
+    assert [s["file"] for s in report["supplements"]] == [f"{PMID}.supp/s1.xlsx"]
+    assert report["over_limit"] == [{"name": "fig_s1.tif", "url": f"{url}#fig_s1.png", "size": 7}]
+    assert not (tmp_path / f"{PMID}.supp" / "fig_s1.png").exists()
+
+
+class Body:
+    """An HTTP response read by `http_get`: its headers and its body, read in chunks."""
+
+    def __init__(self, body: bytes, length: str | None) -> None:
+        self.body, self.status, self.chunks = body, 200, 0
+        self.headers = email.message.Message()
+        self.headers["Content-Type"] = "application/zip"
+        if length is not None:
+            self.headers["Content-Length"] = length
+
+    def __enter__(self) -> "Body":
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        pass
+
+    def geturl(self) -> str:
+        return "https://journal.org/s1.zip"
+
+    def read(self, size: int) -> bytes:
+        self.chunks += 1
+        chunk, self.body = self.body[:size], self.body[size:]
+        return chunk
+
+
+@pytest.mark.parametrize(
+    ("length", "over_limit", "size", "body", "chunks"),
+    [
+        ("20", True, 20, b"", 0),  # refused by its announced size, never read
+        (None, True, None, b"", 6),  # read until past the limit, never to its end
+        (None, False, None, b"0123456789", 6),  # within the limit
+    ],
+)
+def test_http_get_limit(
+    monkeypatch: pytest.MonkeyPatch,
+    length: str | None,
+    over_limit: bool,
+    size: int | None,
+    body: bytes,
+    chunks: int,
+):
+    sent = Body(b"0123456789" + (b"x" * 10 if over_limit else b""), length)
+    monkeypatch.setattr("curation.fetch.CHUNK", 2)
+
+    def urlopen(*_: object, **__: object) -> Body:
+        return sent
+
+    monkeypatch.setattr("urllib.request.urlopen", urlopen)
+    r = http_get("https://journal.org/s1.zip", 10)
+    assert (r.status, r.over_limit, r.size, r.body) == (200, over_limit, size, body)
+    assert sent.chunks == chunks
 
 
 def test_pmc_page_when_no_xml_has_a_body(tmp_path: Path):
@@ -724,6 +854,14 @@ def test_download_names_the_type_from_the_response(tmp_path: Path):
     url = "https://figshare.com/ndownloader/files/42"
     lines = download(tmp_path, url, Server({url: ok(b"x\ty\n", "text/csv")}))
     assert [json.loads(line)["file"] for line in lines] == [str(tmp_path / "42.csv")]
+
+
+def test_download_has_no_limit(tmp_path: Path):
+    """A file downloaded by hand, once judged needed: whatever its size."""
+    url = "https://journal.org/suppl/images.zip"
+    server = Server({url: ok(b"x\ty\n", "text/csv")})
+    download(tmp_path, url, server)
+    assert server.limits[url] is None
 
 
 def test_download_failure(tmp_path: Path):

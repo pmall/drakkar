@@ -16,7 +16,7 @@ def ok(text: str) -> Response:
     return Response("", 200, "text/plain", text.encode())
 
 
-def ncbi(url: str) -> Response:
+def ncbi(url: str, limit: int | None = None) -> Response:
     """NCBI as recorded: BAB32872 a protein, AB047639 a genome coding for two, any other search
     three records, anything else unknown."""
     base = url.split("?")[0]

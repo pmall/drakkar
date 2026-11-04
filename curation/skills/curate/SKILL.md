@@ -38,7 +38,7 @@ Open an original only where its text falls short: a file without text, a table t
 
 A supplementary file is relevant when it can hold interactions. Irrelevant ones, for instance: a video, a reporting summary, a peer review file, a checklist, a figure of non-interaction data, a file of raw source data whose values are already in a table that was read. A supplementary file you could not read (not fetched, held by no copy, or in a format you cannot read) is judged relevant or not by what the text, its caption or its name show: a table of hits, a figure of an interaction experiment, data the text cites for an interaction.
 
-A missing supplementary file is one the text cites and the manifest lacks. When it is relevant and the text gives its URL, download it with `curation-download` before writing.
+A missing supplementary file is one the text cites and the manifest lacks. When a missing file is relevant and the text gives its URL, download it with `curation-download` before writing. A file over 100 MB is always missing: it is not downloaded in advance, as it would most often be a waste of resources, and some are enormous. Download it only if you judge it needed for the curation.
 
 ## Experiment
 

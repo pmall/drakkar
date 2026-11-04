@@ -24,7 +24,10 @@ answering yes or no by one test.
    route that serves one, whatever route gave the article: the PMC open access files, the link
    the article gives (never the PMC website's, which is behind a challenge), the publisher's page,
    then Europe PMC's supplementary files service. Archives are unpacked. A video, the Reporting
-   Summary and the peer review file (both by their caption) are skipped.
+   Summary and the peer review file (both by their caption) are skipped. A file over 100 MB is
+   never downloaded, by the size the server announces or once its download passes 100 MB, nor
+   read from Europe PMC's archive: it is left to a download by hand (`curation-download`), when
+   judged needed.
 
 It writes the article, `<pmid>.xml`, `<pmid>.html` or `<pmid>.pdf`, the supplementary files in
 `<pmid>.supp/`, and the article's figures, the other images of the PMC open access files, in
@@ -46,18 +49,19 @@ directory set up from files the user provides holds the same: each file converte
 
 It prints its report. First a line saying where the article comes from: `Full text: <PMCID>
 (<license>)` or `Full text: <source> (<license>, <URL>)`, ending with `, supplementary files
-missing: <names>` when some are; without the article, `Full text: closed — <why>`, or `Full text:
-not downloaded — <why>` when it is free but no copy could be downloaded, then every route tried
-with its outcome. Then one line per file that could not be converted, with why, and per
-supplementary file missing, with every place tried.
+missing: <names>` when some are, then `, supplementary files over 100 MB: <names>` when some are;
+without the article, `Full text: closed — <why>`, or `Full text: not downloaded — <why>` when it
+is free but no copy could be downloaded, then every route tried with its outcome. Then one line
+per file that could not be converted, with why, per supplementary file missing, with every place
+tried, and per supplementary file over 100 MB, with its size when announced and its URL.
 
-`curation-download` saves the file at each URL (a supplementary file the article links to, a
-commercial construct's page or datasheet) in `<dir>` (the type from the response when its name
-gives none), an archive unpacked (its videos left out), a document's images saved beside it, each
-file but an image converted beside it, as `curation-parse` does; a TIFF or a BMP image saved as
-PNG. Under a `#` header, one line per file, starting with its URL: its entry, as in the manifest,
-in JSON, its paths starting with `<dir>` (an image: `file` alone), or why it could not be had (the
-HTTP outcome, not converted). It ignores an option it does not define, never refuses it.
+`curation-download` saves the file at each URL, whatever its size (a supplementary file the article
+links to, a commercial construct's page or datasheet) in `<dir>` (the type from the response when
+its name gives none), an archive unpacked (its videos left out), a document's images saved beside
+it, each file but an image converted beside it, as `curation-parse` does; a TIFF or a BMP image
+saved as PNG. Under a `#` header, one line per file, starting with its URL: its entry, as in the
+manifest, in JSON, its paths starting with `<dir>` (an image: `file` alone), or why it could not be
+had (the HTTP outcome, not converted). It ignores an option it does not define, never refuses it.
 
 Configuration, in the project's `.env`: `UNPAYWALL_EMAIL`, the address Unpaywall asks for to
 answer a request. Without it Unpaywall is not asked at all.
@@ -75,7 +79,7 @@ import zipfile
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Protocol, cast
 from urllib.parse import quote, unquote, urljoin, urlparse
 
 from dotenv import load_dotenv
@@ -136,6 +140,9 @@ PMC_HOSTS = ("ncbi.nlm.nih.gov", "europepmc.org")
 SERVICES = (PMC_AWS, EUROPE_PMC, EFETCH)
 CAPTION_LENGTH = 200
 MANIFEST = "manifest.json"
+# A supplementary file over it is never downloaded automatically, only by hand once judged needed.
+LIMIT = 100 * 2**20
+CHUNK = 2**20
 
 
 @dataclass
@@ -144,16 +151,36 @@ class Response:
     status: int
     content_type: str
     body: bytes
+    over_limit: bool = False  # a body over the limit asked, not read
+    size: int | None = None  # its size, when the server announced it
 
 
-Get = Callable[[str], Response]
+class Get(Protocol):
+    def __call__(self, url: str, limit: int | None = None) -> Response: ...
 
 
-def http_get(url: str) -> Response:
+def http_get(url: str, limit: int | None = None) -> Response:
+    """The response at a URL. With a limit, a body over it is not read: by the size the server
+    announces, or once more than the limit has been read; read in chunks."""
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
         with urllib.request.urlopen(request, timeout=TIMEOUT) as r:
-            return Response(r.geturl(), r.status, r.headers.get_content_type(), r.read())
+            response = Response(r.geturl(), r.status, r.headers.get_content_type(), b"")
+            length = r.headers.get("Content-Length", "")
+            size = int(length) if length.isdigit() else None
+            if limit is not None and size is not None and size > limit:
+                response.over_limit, response.size = True, size
+                return response
+            chunks: list[bytes] = []
+            read = 0
+            while chunk := r.read(CHUNK):
+                read += len(chunk)
+                if limit is not None and read > limit:
+                    response.over_limit = True
+                    return response
+                chunks.append(chunk)
+            response.body = b"".join(chunks)
+            return response
     except urllib.error.HTTPError as e:
         return Response(url, e.code, "", b"")
     except (urllib.error.URLError, TimeoutError, OSError) as e:
@@ -164,7 +191,14 @@ def http_get(url: str) -> Response:
 def _outcome(r: Response) -> str:
     if r.status == 0:
         return f"failed: {r.body.decode(errors='replace')}"
+    if r.over_limit:
+        return f"HTTP {r.status}, {_over_limit(r.size)}"
     return f"HTTP {r.status}"
+
+
+def _over_limit(size: int | None) -> str:
+    """A file over the limit, with its size when known."""
+    return f"over {LIMIT // 2**20} MB" + (f" ({size / 2**20:,.0f} MB)" if size else "")
 
 
 def _json(get: Get, url: str) -> dict[str, Any] | None:
@@ -691,16 +725,19 @@ class Fetch:
                     yield link.url
 
     def find(self, items: list[Supplement]) -> list[tuple[Supplement, list[dict[str, str]]]]:
-        """Each file looked for on every route; returns the files still missing, with every
-        place tried."""
+        """Each file looked for on every route, one over the limit left out; returns the files
+        still missing, with every place tried."""
         missing: list[tuple[Supplement, list[dict[str, str]]]] = []
         for item in items:
             if _left_out(item.name, item.caption):
                 continue
             tried: list[dict[str, str]] = []
             for url in dict.fromkeys(self.supplement_routes(item)):
-                r = self.get(url)
+                r = self.get(url, LIMIT)
                 tried.append({"url": url, "outcome": _outcome(r)})
+                if r.over_limit:
+                    self._over(item, url, r.size)
+                    break
                 if self._take(item, r, url, tried):
                     break
             else:
@@ -716,9 +753,10 @@ class Fetch:
         asked once and last."""
         url = f"{EUROPE_PMC}/{self.pmcids[0]}/supplementaryFiles"
         if self._archive is None:
-            r = self.get(url)
+            r = self.get(url, LIMIT)
             archive = _zip(r.body) if r.status == 200 and r.body[:2] == b"PK" else None
-            self._archive = (archive, _outcome(r) + ("" if archive else ", no archive"))
+            no_archive = "" if archive or r.over_limit else ", no archive"
+            self._archive = (archive, _outcome(r) + no_archive)
         archive, outcome = self._archive
         still: list[tuple[Supplement, list[dict[str, str]]]] = []
         for item, tried in missing:
@@ -729,8 +767,12 @@ class Fetch:
             ]
             for member in members:
                 assert archive is not None
+                where = f"{url}#{member.filename}"
+                if member.file_size > LIMIT:
+                    self._over(item, where, member.file_size)
+                    continue
                 body = archive.read(member)
-                self._keep(item, Path(member.filename).name, body, f"{url}#{member.filename}")
+                self._keep(item, Path(member.filename).name, body, where)
             if not members:
                 place = outcome if archive is None else f"{outcome}, not in it"
                 still.append((item, [*tried, {"url": url, "outcome": place}]))
@@ -749,6 +791,10 @@ class Fetch:
         self._keep(item, _typed(name, r.content_type), r.body, url)
         return True
 
+    def _over(self, item: Supplement, url: str, size: int | None) -> None:
+        """A supplementary file over the limit: not downloaded, reported with its URL."""
+        self.report["over_limit"].append({"name": item.name, "url": url, "size": size})
+
     def _keep(self, item: Supplement, name: str, body: bytes, url: str) -> None:
         """A supplementary file saved, a zip archive unpacked (its videos left out), each file
         made ready to read (`prepare`)."""
@@ -763,7 +809,7 @@ class Fetch:
         """The article's figures: the images of the PMC open access files that are no
         supplementary file."""
         figures: list[str] = []
-        taken = {x["url"] for x in self.report["supplements"]}
+        taken = {x["url"] for x in self.report["supplements"] + self.report["over_limit"]}
         for name, url in self.oa_files.items():
             if is_image(Path(name)) and url not in taken and (r := self.get(url)).status == 200:
                 for file, _, content in unpacked(name, r.body, url):
@@ -799,6 +845,8 @@ class Fetch:
             report["line"] = f"Full text: {report['source']} ({report['license']}, {report['url']})"
         if missing := [x["name"] for x in report["missing_supplements"]]:
             report["line"] += ", supplementary files missing: " + ", ".join(missing)
+        if over := list(dict.fromkeys(x["name"] for x in report["over_limit"])):
+            report["line"] += f", supplementary files {_over_limit(None)}: " + ", ".join(over)
 
     def not_downloaded_why(self) -> str:
         """Why a free article was not downloaded: the first copy tried, outside the services
@@ -865,6 +913,7 @@ class Fetch:
             if "supplements_from" not in report and (page := self.html_page) is not None:
                 self._list(supplement_links(page.body, page.url), "the publisher's page")
             report.setdefault("supplements", [])
+            report["over_limit"] = []
             missing = self.find(self.listed)
             report["missing_supplements"] = [self._missing(item, tried) for item, tried in missing]
             self.figures()
@@ -891,6 +940,8 @@ def report_lines(report: dict[str, Any]) -> list[str]:
     for x in report.get("missing_supplements", []):
         places = "; ".join(f"{t['url']} ({t['outcome']})" for t in x["tried"])
         lines.append(f"  {x['name']}: missing, tried {places or 'nothing: no route holds it'}")
+    for x in report.get("over_limit", []):
+        lines.append(f"  {x['name']}: {_over_limit(x['size'])}, not downloaded, {x['url']}")
     return lines
 
 

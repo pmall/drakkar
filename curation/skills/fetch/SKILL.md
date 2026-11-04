@@ -6,7 +6,7 @@ description: "The next batch of a run: its selected publications' full texts dow
 
 # Fetch a batch
 
-You form the next batch of a run: up to 20 of its publications whose download is complete, the article and every supplementary file it lists. A publication whose download is not complete stays in the run's pool and never reaches a curator. You download and convert; you never read a full text and never write to the database. Read no doc: this skill is the whole process.
+You form the next batch of a run: up to 20 of its publications whose download is complete, the article and every supplementary file it lists but those over 100 MB, left to the curator's judgment. A publication whose download is not complete stays in the run's pool and never reaches a curator. You download and convert; you never read a full text and never write to the database. Read no doc: this skill is the whole process.
 
 You download the publications one after another: each is taken as far as it can go, the tools then the browser, and its line written in the pool's status, before the next one starts. The browser is the last resort of each publication, not of the run: it is used for the publication at hand, never kept for the end. Never two publications in parallel, never several in one command (a loop, a script): sites rate-limit or block a burst of requests, the tools' as the browser's, while one publication at a time spreads them out; and after each one you know how many are complete, so you stop at 20.
 
@@ -19,7 +19,7 @@ You download the publications one after another: each is taken as far as it can 
 
 2. **One publication**, the next candidate, taken as far as it can go. One of the pool is taken up where it stopped: from the tools without its manifest, from the browser with it, as `curation-fetch` would rewrite the manifest without the files the browser added.
 
-   1. The tools: `mkdir -p <pool>/<pmid> && uv run curation-fetch <pool>/<pmid> <pmid> > <pool>/<pmid>/fetch.txt`. Read its report, never the full text. Its first line says where the article comes from, ending with `, supplementary files missing: <names>` when some are; without the article, `Full text: closed — <why>`, or `Full text: not downloaded — <why>` when it is free but no copy could be downloaded: fetch once more, as the failure may pass. The manifest, `manifest.json`, is written only when the article could be had.
+   1. The tools: `mkdir -p <pool>/<pmid> && uv run curation-fetch <pool>/<pmid> <pmid> > <pool>/<pmid>/fetch.txt`. Read its report, never the full text. Its first line says where the article comes from, ending with `, supplementary files missing: <names>` when some are, then `, supplementary files over 100 MB: <names>`, which leave the download complete and which you never download; without the article, `Full text: closed — <why>`, or `Full text: not downloaded — <why>` when it is free but no copy could be downloaded: fetch once more, as the failure may pass. The manifest, `manifest.json`, is written only when the article could be had.
    2. The browser, its last resort, for what the tools could not download: a free file from the copies the report tried, a closed one through the library proxy (below).
    3. Its line in `<pool>/status.tsv`, written or replaced, tab-separated under a header line: `pmid`; `missing`, empty when its download is complete, else `article` or the names of the missing supplementary files; `tried`, what was tried for them, each with why it failed (fetch: closed, fetch again, browser, proxy: no access).
 
