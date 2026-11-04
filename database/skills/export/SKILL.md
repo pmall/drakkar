@@ -10,7 +10,7 @@ The derived datasets are files for other applications, exported from the live de
 
 ## The run cut
 
-The export takes the vh runs up to a run, given by its ID (`runs.id`), never its name, and the special runs (`special-<n>`), all of them unless the user cuts them too; hh is always whole. Take the cut from the user's request; otherwise show the vh runs still being curated, with their publications neither curated nor discarded, and agree the cut with the user before going on:
+The export takes the vh runs up to a run, in the order of their IDs (`runs.id`), and the special runs (`special-<n>`), all of them unless the user cuts them too; hh is always whole. The user names the cut run by its name, as always; the command takes its ID. Take the cut from the user's request; otherwise show the vh runs still being curated, with their publications neither curated nor discarded, and agree the cut with the user before going on:
 
 ```
 uv run database-read sql "SELECT r.id, r.name, count(*) AS publications FROM runs AS r JOIN associations AS a ON a.run_id = r.id WHERE r.type = 'vh' AND a.state IN ('pending', 'selected') GROUP BY r.id, r.name ORDER BY r.id"
@@ -61,4 +61,4 @@ The species of a viral interactor is given by the deepest taxon at or above its 
 
 ## Reply
 
-The generic viral proteins: what `sync` reported (counts, names removed); the species added or placed, and why; the names given another name's protein (`name → protein`, with their descriptions). Then the export: the run cut (name and ID), the special runs, the lines of each dataset, the numbers of the check and its result, and the directory. A failed check is the first thing said, with its failures. The user reviews `git diff database/generic/`; when a decision there changes, export again. Commit only on the user's request.
+The generic viral proteins: what `sync` reported (counts, names removed); the species added or placed, and why; the names given another name's protein (`name → protein`, with their descriptions). Then the export: the run cut, by its name, the special runs, the lines of each dataset, the numbers of the check and its result, and the directory. A failed check is the first thing said, with its failures. The user reviews `git diff database/generic/`; when a decision there changes, export again. Commit only on the user's request.

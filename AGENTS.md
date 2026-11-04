@@ -23,6 +23,7 @@ Drakkar is the curation database of virus–human protein–protein interactions
 ## Working with the user
 
 - The skills and docs are instructions for an agent that curates publications and manages Drakkar, with the user supervising its results: not a pipeline where every detail is settled end to end. What matters is the instructions, the process, and data that is easy to use and manage. Not every detail or edge case needs a rule, and no error is dramatic: every version is kept, and a publication can always be curated again.
+- People name a run by its name: "run 85" is the run named 85, never the run whose ID is 85, unless the message says it is an ID. Every reply names runs by their names; the ID is only for the queries and commands that take one, never a correction to the user.
 - Use the user's definitions exactly as given (the glossaries, `database/docs/glossary.md` and `curation/docs/glossary.md`): never merge, regroup, relabel or extend a problem, term or rule; when one seems incomplete, ask one precise question.
 - When the user states a principle, apply it to every case it covers in one pass; ask only about cases it does not decide.
 - Be precise and short: say what is counted (descriptions, interactors, proteins, sides) and never mix units; one decision at a time; show the special cases, not the obvious ones; plain words, no invariant codes.
