@@ -62,7 +62,7 @@ def test_export(conn, tmp_path):
     generic = _generic(conn, tmp_path / "generic")
     report = export(conn.cursor(), generic, tmp_path / "out")
     assert report.splitlines() == [
-        "vh runs: 6, all; special runs: 0, all",
+        "vh runs: 6, all",
         "descriptions_hh_run81 (.tsv, .xlsx): 5 descriptions",
         "descriptions_vh_run81 (.tsv, .xlsx): 425 descriptions",
         "interactors_viral_run81 (.tsv, .xlsx): 171 viral interactors",
@@ -142,41 +142,26 @@ def test_export(conn, tmp_path):
 
 
 def test_runs(conn, tmp_path):
-    """`run` keeps the vh runs up to its ID, special runs aside, `special_run` the special runs
-    up to its ID, all by default; hh is whole. The files are named after the last vh run, its
-    name sanitized. A cut that is not a run of its kind is refused."""
+    """`run` keeps the vh runs up to its ID, all by default; hh is whole. The files are named
+    after the last vh run, its name sanitized. A cut that is not the ID of a vh run is refused."""
     generic = _generic(conn, tmp_path / "generic")
     cur = conn.cursor()
     cur.execute("UPDATE runs SET name = '32 b/2' WHERE id = 12")  # a name to sanitize
-    cur.execute("INSERT INTO runs (id, type, name) VALUES (70, 'vh', 'special-1')")
-    cur.execute("INSERT INTO runs (id, type, name) VALUES (71, 'vh', 'special-2')")
-    cur.execute("UPDATE associations SET run_id = 70 WHERE pmid = 24379396")  # from run ID 30
-    cur.execute("UPDATE associations SET run_id = 71 WHERE pmid = 31690057")  # from run ID 44
 
     def pmids(path: Path) -> set[str]:
         return {r[2] for r in _lines(path)[1:]}
 
     report = export(cur, generic, tmp_path / "a", run=12)
-    assert report.splitlines()[0] == "vh runs: 2, up to ID 12; special runs: 2, all"
+    assert report.splitlines()[0] == "vh runs: 2, up to ID 12"
     assert pmids(tmp_path / "a" / "descriptions_vh_run32-b-2.tsv") == {
         "8626429", "9858596", "22046132", "25031347",  # run IDs 1 and 12; not 10777214, its
         # human interactors not up to date
-        "24379396", "31690057",  # the special runs
     }  # fmt: skip
     assert pmids(tmp_path / "a" / "descriptions_hh_run32-b-2.tsv") == {"15471871", "7499434"}
 
-    report = export(cur, generic, tmp_path / "b", run=12, special_run=70)
-    assert report.splitlines()[0] == "vh runs: 2, up to ID 12; special runs: 1, up to ID 70"
-    assert "31690057" not in pmids(tmp_path / "b" / "descriptions_vh_run32-b-2.tsv")
-    assert "24379396" in pmids(tmp_path / "b" / "descriptions_vh_run32-b-2.tsv")
-
-    for run, special_run, message in [
-        (31, None, "--run 31: not the ID of a vh run"),  # an hh run
-        (70, None, "--run 70: not the ID of a vh run"),  # a special run
-        (None, 12, "--special-run 12: not the ID of a special run"),
-    ]:
-        with pytest.raises(SystemExit, match=message):
-            export(cur, generic, tmp_path / "c", run=run, special_run=special_run)
+    for run in [31, 99]:  # an hh run, no run
+        with pytest.raises(SystemExit, match=f"--run {run}: not the ID of a vh run"):
+            export(cur, generic, tmp_path / "c", run=run)
 
 
 def test_not_in_step(conn, tmp_path):

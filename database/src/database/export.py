@@ -1,20 +1,19 @@
 """The derived datasets (`docs/datasets.md`), exported from Drakkar (read-only on the
 database).
 
-    uv run database-export <generic> <dir> [--run <id>] [--special-run <id>]
+    uv run database-export <generic> <dir> [--run <id>]
 
 Writes the five datasets to the directory, from the live descriptions whose human interactors are
-on their current snapshots, in Swiss-Prot: of the vh runs up to `--run`, special runs aside, and
-of the special runs up to `--special-run`, all by default; of every hh run. A run is given by its
-ID (`runs.id`), not its name, so that an export can stop before a run in progress; a cut that is
-not the ID of a run of its kind is refused. The species and generic viral proteins are read from
-`<generic>`, the directory of their files (`generic.py`), in step with Drakkar: a taxon under no
-species, a species not in `species.tsv` or a name with no protein is reported, and nothing is
-written.
+on their current snapshots, in Swiss-Prot: of the vh runs up to `--run`, all by default; of every
+hh run. A run is given by its ID (`runs.id`), not its name, so that an export can stop before a
+run in progress; a cut that is not the ID of a vh run is refused. The species and generic viral
+proteins are read from `<generic>`, the directory of their files (`generic.py`), in step with
+Drakkar: a taxon under no species, a species not in `species.tsv` or a name with no protein is
+reported, and nothing is written.
 
 Each dataset is written as a `.tsv` file, tab-separated under a header line, and an `.xlsx` file,
-the same lines; each name ends with `run` and the name of the last vh run exported by ID, special
-runs aside, each character other than a letter, a digit or `-` made a `-`
+the same lines; each name ends with `run` and the name of the last vh run exported by ID, each
+character other than a letter, a digit or `-` made a `-`
 (`descriptions_vh_run87.tsv`):
 
 - `descriptions_hh`: `stable_id`, `version`, `pmid`, `psimi_id`, `method`; each human interactor:
@@ -138,22 +137,14 @@ def _isoform(accession: str, mapping: dict[str, Any]) -> str:
     return min(isoforms, key=lambda isoform: int(isoform.rsplit("-", 1)[1]))
 
 
-def _runs(cur: Any, run: int | None, special_run: int | None) -> dict[int, bool]:
-    """The vh runs exported, each with whether it is a special run: those up to `run`, special
-    runs aside, and the special runs up to `special_run`; None is all. A cut that is not a run of
-    its kind is refused."""
-    cur.execute("SELECT id, name LIKE 'special-%' AS special FROM runs WHERE type = 'vh'")
-    runs: dict[int, bool] = dict(cur.fetchall())
-    if run is not None and runs.get(run) is not False:
+def _runs(cur: Any, run: int | None) -> list[int]:
+    """The IDs of the vh runs exported: those up to `run`, all when None. A cut that is not the ID
+    of a vh run is refused."""
+    cur.execute("SELECT id FROM runs WHERE type = 'vh' ORDER BY id")
+    runs: list[int] = [i for (i,) in cur.fetchall()]
+    if run is not None and run not in runs:
         raise SystemExit(f"--run {run}: not the ID of a vh run")
-    if special_run is not None and runs.get(special_run) is not True:
-        raise SystemExit(f"--special-run {special_run}: not the ID of a special run")
-    exported: dict[int, bool] = {}
-    for i, special in runs.items():
-        cut = special_run if special else run
-        if cut is None or i <= cut:
-            exported[i] = special
-    return exported
+    return [i for i in runs if run is None or i <= run]
 
 
 def _read(path: Path) -> list[dict[str, str]]:
@@ -288,10 +279,9 @@ def export(
     generic: Path,
     directory: Path,
     run: int | None = None,
-    special_run: int | None = None,
 ) -> str:
     """Write the five datasets to the directory; the report: what each holds."""
-    runs = _runs(cur, run, special_run)
+    runs = _runs(cur, run)
     cur.execute(
         """
         SELECT d.stable_id, d.version, a.pmid, m.psimi_id, m.name AS method,
@@ -309,7 +299,7 @@ def export(
         WHERE d.deleted_at IS NULL AND a.run_id = ANY(%s) AND current1.reviewed
         ORDER BY d.stable_id
         """,
-        (list(runs),),
+        (runs,),
     )
     columns = [c.name for c in cur.description]
     vh = [dict(zip(columns, row, strict=True)) for row in cur.fetchall()]
@@ -385,7 +375,7 @@ def export(
 
     cur.execute(
         "SELECT name FROM runs WHERE id = %s",
-        (max(i for i, special in runs.items() if not special),),
+        (max(runs),),
     )
     (name,) = cur.fetchone()
     top = "run" + re.sub(r"[^A-Za-z0-9-]", "-", name)  # in a file name, `_` separates its parts
@@ -404,11 +394,8 @@ def export(
     _write(directory, f"mappings_h_{top}", MAPPINGS_H, sorted(mappings["h"].values()))
     _write(directory, f"mappings_v_{top}", MAPPINGS_V, sorted(mappings["v"].values()))
 
-    special = sum(runs.values())
     report = [
-        f"vh runs: {len(runs) - special}, {'all' if run is None else f'up to ID {run}'}; "
-        f"special runs: {special}, "
-        f"{'all' if special_run is None else f'up to ID {special_run}'}",
+        f"vh runs: {len(runs)}, {'all' if run is None else f'up to ID {run}'}",
         f"descriptions_hh_{top} (.tsv, .xlsx): {len(hh)} descriptions",
         f"descriptions_vh_{top} (.tsv, .xlsx): {len(vh)} descriptions",
         f"interactors_viral_{top} (.tsv, .xlsx): {len(interactors)} viral interactors",
@@ -416,7 +403,7 @@ def export(
         f"mappings_v_{top} (.tsv, .xlsx): {len(mappings['v'])} mappings",
         "check:",
     ]
-    numbers, failures = check_export(cur, directory, top, list(runs))
+    numbers, failures = check_export(cur, directory, top, runs)
     report += [f"  {line}" for line in numbers]
     if not failures:
         return "\n".join([*report, "  ok"])
@@ -434,8 +421,7 @@ def main() -> None:
     parser.add_argument("generic", type=Path)
     parser.add_argument("directory", type=Path)
     parser.add_argument("--run", type=int)
-    parser.add_argument("--special-run", type=int)
     args = parser.parse_args()
     with connect(readonly=True) as conn, conn.cursor() as cur:
         cur.execute("SET statement_timeout = '60s'")
-        print(export(cur, args.generic, args.directory, args.run, args.special_run))
+        print(export(cur, args.generic, args.directory, args.run))

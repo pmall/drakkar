@@ -10,7 +10,7 @@ The derived datasets are files for other applications, exported from the live de
 
 ## The run cut
 
-The export takes the vh runs up to a run, in the order of their IDs (`runs.id`), and the special runs (`special-<n>`), all of them unless the user cuts them too; hh is always whole. The user names the cut run by its name, as always; the command takes its ID. Take the cut from the user's request; otherwise show the vh runs still being curated, with their publications neither curated nor discarded, and agree the cut with the user before going on:
+The export takes the vh runs up to a run, in the order of their IDs (`runs.id`); hh is always whole. The user names the cut run by its name, as always; the command takes its ID. Take the cut from the user's request; otherwise show the vh runs still being curated, with their publications neither curated nor discarded, and agree the cut with the user before going on:
 
 ```
 uv run database-read sql "SELECT r.id, r.name, count(*) AS publications FROM runs AS r JOIN associations AS a ON a.run_id = r.id WHERE r.type = 'vh' AND a.state IN ('pending', 'selected') GROUP BY r.id, r.name ORDER BY r.id"
@@ -57,8 +57,8 @@ The species of a viral interactor is given by the deepest taxon at or above its 
 
 ## The export
 
-`uv run database-export database/generic/ <workdir>/exports/ --run <id>`, with `--special-run <id>` when the user cuts the special runs. Read-only on the database, it refuses to write anything while `database/generic/` is not in step. It writes five datasets, each as a `.tsv` and an `.xlsx` file named after the cut run (`descriptions_vh_run87.tsv`): `descriptions_hh`, `descriptions_vh`, `interactors_viral` (the sequence of each viral interactor), `mappings_h` and `mappings_v`; it prints the runs exported and the lines of each, then checks the files, read back, against each other and against the database: the numbers (live descriptions = exported + left out, a human interactor not up to date; mappings = lines + merged in homodimers), then `ok` or the failures, with an error.
+`uv run database-export database/generic/ <workdir>/exports/ --run <id>`. Read-only on the database, it refuses to write anything while `database/generic/` is not in step. It writes five datasets, each as a `.tsv` and an `.xlsx` file named after the cut run (`descriptions_vh_run87.tsv`): `descriptions_hh`, `descriptions_vh`, `interactors_viral` (the sequence of each viral interactor), `mappings_h` and `mappings_v`; it prints the runs exported and the lines of each, then checks the files, read back, against each other and against the database: the numbers (live descriptions = exported + left out, a human interactor not up to date; mappings = lines + merged in homodimers), then `ok` or the failures, with an error.
 
 ## Reply
 
-The generic viral proteins: what `sync` reported (counts, names removed); the species added or placed, and why; the names given another name's protein (`name → protein`, with their descriptions). Then the export: the run cut, by its name, the special runs, the lines of each dataset, the numbers of the check and its result, and the directory. A failed check is the first thing said, with its failures. The user reviews `git diff database/generic/`; when a decision there changes, export again. Commit only on the user's request.
+The generic viral proteins: what `sync` reported (counts, names removed); the species added or placed, and why; the names given another name's protein (`name → protein`, with their descriptions). Then the export: the run cut, by its name, the lines of each dataset, the numbers of the check and its result, and the directory. A failed check is the first thing said, with its failures. The user reviews `git diff database/generic/`; when a decision there changes, export again. Commit only on the user's request.

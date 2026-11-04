@@ -12,7 +12,7 @@ Descriptions are versioned: a revision makes a new version under the same stable
 
 1. **A run**: a PubMed query gives a run of publications, each `pending`.
 2. **Pre-curation**: from its title and abstract, each is `selected` or `discarded`.
-3. **Curation**: the agent curates each selected publication from its full text and supplementary files, into its descriptions and its publication note, and the publication is `curated`. When a relevant file is missing, it stays `selected` and later goes to a special run, for a manual pass.
+3. **Curation**: the agent curates each selected publication from its full text and supplementary files, into its descriptions and its publication note, and the publication is `curated`. When a relevant file is missing, it stays `selected`, for a manual pass.
 4. **UniProt releases**: each release loads the new snapshots, and the versioning pass moves the obsolete interactors of the live descriptions to current snapshots.
 5. **Exports**: the derived datasets, files for other applications, from the live descriptions. The vh descriptions show each interaction as one human Swiss-Prot entry × one generic viral protein, one node of an interaction graph.
 

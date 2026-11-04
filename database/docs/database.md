@@ -8,7 +8,7 @@ Its whole structure (tables, constraints, indexes, rules, the `dataset` view) is
 
 | Table | Role |
 | -- | -- |
-| `runs` | The PMIDs of one PubMed query (`type` `vh` or `hh`, `name` = sequence number), or a special run (vh, `special-<n>`). New runs are `vh`. |
+| `runs` | The PMIDs of one PubMed query (`type` `vh` or `hh`, `name` = sequence number). New runs are `vh`. |
 | `publications` | One row per PMID, with the PubMed record as JSON in `metadata`. |
 | `associations` | A publication in a run: its `state`, its publication note (`annotation`) and the date of its last AI curation pass (`ai_pass_at`): its states (`#states`). |
 | `descriptions` | Descriptions, versioned (`#versioning`), each version with its description note (`annotation`, `#notes`). |
@@ -26,17 +26,17 @@ A publication of a vh run moves through these states, its association's `state` 
 | -- | -- |
 | `pending` | Not pre-curated yet: every publication of a new run starts there. |
 | `selected`, null | Kept at pre-curation, from its title and abstract: waiting for its AI curation pass. |
-| `selected`, date | The AI curation could not curate it fully, a relevant file missing: waiting for a manual pass, in a special run. |
+| `selected`, date | The AI curation could not curate it fully, a relevant file missing: waiting for a manual pass. |
 | `curated` | All its relevant files explored and all its descriptions extracted, with or without descriptions (by the AI curation if dated). |
 | `discarded` | Rejected at pre-curation. |
 
-A run is **complete** when every publication is `discarded` or `curated`. The AI curation is **done with a run** when no publication is `pending` and every `selected` publication has a date. The publications left `selected` with a date are moved, when the user asks, to the open special run, the highest `special-<n>`, so the run they leave can be complete: the association changes run, its descriptions with it, and a `Moved` note goes first in its note (`#notes`); a new special run is opened when the user says so. A `discarded` publication without an AI curation note may have been decided on the abstract or on the full text: the two cannot be told apart, and such states are left as they are.
+A run is **complete** when every publication is `discarded` or `curated`. The AI curation is **done with a run** when no publication is `pending` and every `selected` publication has a date. A `discarded` publication without an AI curation note may have been decided on the abstract or on the full text: the two cannot be told apart, and such states are left as they are.
 
 ### Notes <a id="notes"></a>
 
 The notes only serve the curation to explain and justify its choices later, to an external reviewer or in a report: free text.
 
-- **Publication note**, `associations.annotation`: the notes of the publication, the newest first, each followed by a line `---` and the previous ones. A curation pass writes its note, its first word the state, which the write puts after the date and, when the write names one, its author (`[2026-10-06] CURATED …`, `[2026-10-06, pmall] CURATED …`); a move to a special run writes the note `Moved from run <name>`, dated the same way.
+- **Publication note**, `associations.annotation`: the notes of the publication, the newest first, each followed by a line `---` and the previous ones. A curation pass writes its note, its first word the state, which the write puts after the date and, when the write names one, its author (`[2026-10-06] CURATED …`, `[2026-10-06, pmall] CURATED …`).
 - **Description note**, `descriptions.annotation`, one note per version, undated: the version has its dates. A version made by a curation holds the curation's note. A version made otherwise, and what was decided on a version later without a new version (an interactor not moved, an in-place correction, a removal), are each a line `ACTION: summary` followed by `- ` detail lines. The history of a description is its notes read version by version.
 
 | Action | Why | Example summary |
@@ -48,8 +48,6 @@ The notes only serve the curation to explain and justify its choices later, to a
 A publication note:
 
 ```
-[2026-10-21] Moved from run 88
----
 [2026-10-20] SELECTED
 - Table S2, the screen's hits (Results, "Screen"), could not be had: no URL given
 ---

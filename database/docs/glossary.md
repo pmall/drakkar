@@ -8,13 +8,12 @@ One meaning per word, used everywhere: docs, code, reports and conversations. Wh
 | -- | -- |
 | Publication | A PubMed record, identified by its PMID (`publications`). Never "paper". |
 | Run | The PMIDs returned by one PubMed query (`runs`), of type vh or hh. Named by a number: "run 74" is its `name`, never its `id`. |
-| Special run | A vh run holding the publications the AI curation could not curate fully (`selected` with a pass date), moved there from their runs (`database.md#states`). Named `special-1`, `special-2`…; the highest is the open one. |
 | vh, hh | Virus–human and human–human. A vh run looks for virus–human interactions, an hh run for human–human ones. hh gets no new curation, but its descriptions follow the invariants and the UniProt upgrades like vh ones. |
 | Association | A publication in a run (`associations`). It carries the state and the note. A publication can be in a vh run and an hh run: two associations. |
 | State | The curation state of an association: `pending` (not pre-curated), `selected` (kept at pre-curation, curation in progress), `discarded` (rejected at pre-curation), `curated` (all its relevant files explored and all its descriptions extracted; with or without descriptions). |
 | Pre-curation | The decision `selected` or `discarded`, from the title and abstract. |
 | Curation pass | Reading the relevant files of a selected publication (its full text and supplementary files) and recording its descriptions. Ends with the state `curated` when the curation could explore all of them and extracted all the descriptions; with a relevant file missing, `selected` with a date (`database.md#states`). The last AI curation pass is dated by `associations.ai_pass_at`. |
-| Manual pass | The curation of a publication the AI curation could not curate fully (`selected` with a pass date), in a special run: by hand, or by an agent from a curator file, an Excel file describing its interactions. |
+| Manual pass | The curation of a publication the AI curation could not curate fully (`selected` with a pass date): by hand, or by an agent from a curator file, an Excel file describing its interactions. |
 | Note | The free text of an association (`associations.annotation`), the publication note: decisions about the publication (`database.md#notes`). It never holds maintenance information. |
 
 ## Proteins
