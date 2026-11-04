@@ -1,7 +1,7 @@
 ---
 name: fetch
 disable-model-invocation: true
-description: "The next batch of a run: its selected publications' full texts downloaded into the run's pool, and up to 20 whose download is complete formed into a batch for the batch skill. Use when the user asks to fetch or download publications or to prepare a batch; the prompt may set the run."
+description: "The next batch of a run: its selected publications' full texts downloaded into the run's pool, and up to 20 whose download is complete formed into a batch for the curate-batch skill. The prompt may set the run."
 ---
 
 # Fetch a batch
@@ -25,7 +25,7 @@ You download the publications one after another: each is taken as far as it can 
 
 3. **The next publication**, the same way, until the pool holds 20 complete publications or no candidate is left. A site that starts refusing every request: stop downloading from it; the pool keeps what is done, for the next session.
 
-4. **Batch**: `<batch>`, `<workdir>/run<run>/batch<n>/`, `<n>` the next batch number in the run. Move the complete publications, up to 20, from `<pool>/<pmid>/` to `<batch>/<pmid>/`, remove their lines from `status.tsv`, then write `<batch>/pmids.txt`, one PMID per line, last: a batch with its `pmids.txt` is ready for the `batch` skill.
+4. **Batch**: `<batch>`, `<workdir>/run<run>/batch<n>/`, `<n>` the next batch number in the run. Move the complete publications, up to 20, from `<pool>/<pmid>/` to `<batch>/<pmid>/`, remove their lines from `status.tsv`, then write `<batch>/pmids.txt`, one PMID per line, last: a batch with its `pmids.txt` is ready for the `curate-batch` skill.
 
 5. **Reply**: the batch and its publications; the publications left in the pool, each with what is missing and what was tried.
 

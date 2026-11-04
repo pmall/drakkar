@@ -25,7 +25,7 @@ The agent curates; the user supervises. The agent reads each publication, decide
 The repository is a uv workspace of two packages, each standing alone with its code, tests, docs and processes:
 
 - [`database/`](database/README.md), **the Drakkar database**: its structure, the commands that read, check and write it, the only way to write to it, the UniProt releases it loads and the datasets it exports. It is made for many clients and knows nothing of the curation.
-- [`curation/`](curation/README.md), **the curation**, a client of the Drakkar database: the `curate` skill, which curates one publication, the `fetch` skill, which downloads the full texts of a batch of them, the `batch` skill, which curates a batch, one curator agent per publication, and the commands that fetch and convert full texts. It reaches the database only through its commands.
+- [`curation/`](curation/README.md), **the curation**, a client of the Drakkar database: the `curate` skill, which curates one publication, the `fetch` skill, which downloads the full texts of a batch of them, the `curate-batch` skill, which curates a batch, one curator agent per publication, the `review` and `review-batch` skills, which review a curated publication or batch, and the commands that fetch and convert full texts. It reaches the database only through its commands.
 
 [`AGENTS.md`](AGENTS.md) holds the agent's instructions: how it works with the user, writes to and queries the database, and where everything is. [`.claude/`](.claude/) links the agent and the skills of both packages for Claude Code.
 
@@ -41,11 +41,13 @@ cp .env.example .env    # then fill it in, as its comments say
 In Claude Code, run from the repository:
 
 - `/fetch` downloads the full texts of a run's publications and forms its next batch from those whose download is complete.
-- `/batch` curates a batch, one curator agent per publication, and ends with its dry run and report; nothing is written before the user asks for the commit.
+- `/curate-batch` curates a batch, one curator agent per publication, and ends with its dry run and report; nothing is written before the user asks for the commit.
+- `/review-batch`, optional, reviews a curated batch, committed or not, one reviewer agent per publication, and reports what is wrong; it writes nothing.
 - `/curate` curates one publication from its directory into its descriptions and its note, as files.
+- `/review` reviews one curated publication and replies what is wrong; it writes nothing.
 - `/export` exports the derived datasets.
 
-Each skill is started by the user only; the curator agent preloads `curate`. The commands run from the repository root, `uv run <command>`; `--help` describes each.
+Each skill is started by the user only; the curator and reviewer agents preload `curate` and `review`. The commands run from the repository root, `uv run <command>`; `--help` describes each.
 
 ## Development
 

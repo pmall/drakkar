@@ -1,7 +1,7 @@
 ---
 name: export
 disable-model-invocation: true
-description: "The derived datasets exported from Drakkar: the run cut agreed with the user, the generic viral proteins of database/generic/ brought in step (new species placed, new generic names grouped), then the five datasets written as .tsv and .xlsx. Use when the user asks for a dataset export, or to update the generic viral proteins."
+description: "The derived datasets exported from Drakkar: the run cut agreed with the user, the generic viral proteins of database/generic/ brought in step (new species placed, new generic names grouped), then the five datasets written as .tsv and .xlsx."
 ---
 
 # Export

@@ -1,7 +1,7 @@
 ---
-name: batch
+name: curate-batch
 disable-model-invocation: true
-description: "Curation of a batch formed by the fetch skill: its publications, each curated by a curator agent, merged into the batch files that pass the dry run, committed only when the user asks. Use when the user asks to curate a batch; the prompt may name it."
+description: "Curation of a batch formed by the fetch skill: its publications, each curated by a curator agent, merged into the batch files that pass the dry run, committed only when the user asks. The prompt may name the batch."
 ---
 
 # Curate a batch

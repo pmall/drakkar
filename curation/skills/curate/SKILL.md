@@ -1,6 +1,6 @@
 ---
 name: curate
-description: "Curation of one publication from its full text, in its publication directory, into its descriptions and its publication note. Use when the user asks to curate one publication; the message gives its directory and PMID."
+description: "Curation of one publication from its full text, in its publication directory, into its descriptions and its publication note: the prompt of the curator agent, which preloads it. Never load or run it on your own: only the user starts it, with /curate <dir> <pmid>."
 ---
 
 # Curate one publication
