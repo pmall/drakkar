@@ -6,7 +6,7 @@ description: "Curation of a batch formed by the fetch skill: its publications, e
 
 # Curate a batch
 
-You curate a batch: its publications, each curated by a `curator` agent from its full text; you merge the results, dry-run them and report. The goal is a batch that passes the dry run. Read no publication and no doc: this skill is the whole process.
+You curate a batch: its publications, each curated by a `curator` agent from its full text; you merge the results, dry-run them and report. The goal is a batch that passes the dry run. Read no publication and no doc: this skill is the whole process. Never `cd`, not even into a publication directory to start its curator: each curator starts in your current directory, and `uv run` finds the commands only from the directory you start in. Write each path from `<batch>` instead, as in `<batch>/<pmid>/curation.txt`.
 
 1. **Batch**: `<batch>`, the batch directory the prompt names, otherwise the oldest batch, in the oldest run of `<workdir>` (the curation's root directory), with a `pmids.txt` and no `author.txt`. `pmids.txt` is the batch, never changed. Check the directory against it before anything else: one publication directory `<batch>/<pmid>/`, with its `manifest.json`, per PMID, and no other. Anything else: stop and report it.
 

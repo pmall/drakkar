@@ -6,7 +6,7 @@ description: "Review of a curated batch, committed or not: each publication revi
 
 # Review a batch
 
-You review a curated batch: each publication is reviewed by a `reviewer` agent, which hunts in its descriptions and its note for what is wrong. You check what the reviewers find and report it. The review is optional and writes nothing: a batch is reviewed before or after its commit. Read no doc, and of a publication only the places step 3 checks: this skill is the whole process.
+You review a curated batch: each publication is reviewed by a `reviewer` agent, which hunts in its descriptions and its note for what is wrong. You check what the reviewers find and report it. The review is optional and writes nothing: a batch is reviewed before or after its commit. Read no doc, and of a publication only the places step 3 checks: this skill is the whole process. Never `cd`, not even into a publication directory to start its reviewer: each reviewer starts in your current directory, and `uv run` finds the commands only from the directory you start in. Write each path from `<batch>` instead, as in `<batch>/<pmid>/curation.txt`.
 
 1. **Batch**: `<batch>`, the batch directory the prompt names, in `<workdir>`, the curation's root directory. Its publications are those of `<batch>/pmids.txt` whose directory `<batch>/<pmid>/` holds `descriptions.jsonl` and `curation.txt`; the others are not reviewed.
 
