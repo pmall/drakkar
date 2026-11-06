@@ -8,7 +8,7 @@ The curation of Drakkar by an AI agent. A client of the Drakkar database, it nev
 - [`skills/curate-batch/`](skills/curate-batch/SKILL.md): the curation of a batch, each publication by a curator agent, merged into files that pass the dry run and reported; the commit comes when the user asks.
 - [`skills/review/`](skills/review/SKILL.md): the review of one curated publication, a hunt for what is wrong in its descriptions and its note, against its full text.
 - [`agents/reviewer.md`](agents/reviewer.md): the reviewer agent, which runs the `review` skill on one publication of a batch; its file holds only its settings.
-- [`skills/review-batch/`](skills/review-batch/SKILL.md): the optional review of a curated batch, each publication by a reviewer agent, what they find checked and reported; it writes nothing.
+- [`skills/review-batch/`](skills/review-batch/SKILL.md): the optional review of a curated batch, each publication by a reviewer agent, what they find checked and reported, then the fixes the user directs.
 - [`docs/`](docs/): [`curation-rules.md`](docs/curation-rules.md), the biological rules of the `curate` skill's prompt, explained; [`glossary.md`](docs/glossary.md), the curation's own terms.
 - [`src/curation/`](src/curation/): the functions that fetch and convert full texts, read NCBI sequences and build a batch's publications file, and never touch the database.
 - [`scripts/`](scripts/): one script per tool, run by its path from the repository root, `uv run ./curation/scripts/<tool>.py`; each is described in its docstring, which `--help` prints.
