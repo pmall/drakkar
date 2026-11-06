@@ -1,14 +1,8 @@
-"""Check the Drakkar invariants (`docs/database.md#invariants`) on vh and hh data, without writing.
-
-    uv run database-check <dir>
-
-Each invariant is a query returning its violations, one row per violation, with the stable ID and
-PMID when relevant. The report, written to the directory (`<workdir>/<release>/reports/check`,
-say), is a Markdown summary, `check.md`, plus one TSV file per violated invariant,
-`<invariant>.tsv`. The exit code is 1 if any error is found.
+"""The Drakkar invariants (`docs/database.md#invariants`) on vh and hh data, checked without
+writing: each invariant is a query returning its violations, one row per violation, with the
+stable ID and PMID when relevant. `run` writes the report of `database/scripts/check.py`.
 """
 
-import argparse
 import csv
 import json
 import re
@@ -20,8 +14,10 @@ from datetime import date
 from pathlib import Path
 from typing import Any, LiteralString, cast
 
+import psycopg
+
 from database.align import MIN_IDENTITY, core, segment_identity
-from database.db import connect
+from database.db import require_idle
 
 Rows = tuple[list[str], list[tuple[Any, ...]]]
 
@@ -621,10 +617,12 @@ def summary(results: list[Result]) -> list[str]:
     return lines
 
 
-def run(output: Path) -> int:
+def run(conn: psycopg.Connection, output: Path) -> tuple[str, bool]:
+    """Checks every invariant in a transaction of its own, rolled back, writes the report to the
+    directory, and returns its summary and whether no error was found."""
     output.mkdir(parents=True, exist_ok=True)
-    with connect() as conn:
-        cur = conn.cursor()
+    require_idle(conn)
+    with conn.cursor() as cur:
         results = run_checks(cur, log=True)
         cur.execute(
             """
@@ -658,14 +656,4 @@ def run(output: Path) -> int:
         *summary(results),
     ]
     (output / "check.md").write_text("\n".join(lines) + "\n")
-    print("\n".join(lines))
-    return int(bool(errors(results)))
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    parser.add_argument("output", type=Path)
-    args = parser.parse_args()
-    sys.exit(run(args.output))
+    return "\n".join(lines), not errors(results)

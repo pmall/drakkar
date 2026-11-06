@@ -1,6 +1,7 @@
-"""The diff of a curated publication against its live descriptions, and its command."""
+"""The diff of a curated publication against its live descriptions, and its script."""
 
 import subprocess
+import sys
 from dataclasses import replace
 from pathlib import Path
 
@@ -117,14 +118,16 @@ def test_a_publication_in_no_vh_run_is_refused(conn):
         diff(conn, 15471871, [])  # in an hh run
 
 
-# --- The command --------------------------------------------------------------------------------
+# --- The script ---------------------------------------------------------------------------------
 
 
-def run(*args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(["uv", "run", *args], capture_output=True, text=True)
+def run(script: str, *args: str) -> subprocess.CompletedProcess[str]:
+    """A script of `scripts/`, run with this Python."""
+    path = Path(__file__).parents[1] / "scripts" / f"{script}.py"
+    return subprocess.run([sys.executable, path, *args], capture_output=True, text=True)
 
 
-def test_diff_command_writes_files_the_write_tools_take(conn, tmp_path: Path):
+def test_diff_script_writes_files_the_write_tools_take(conn, tmp_path: Path):
     curated = live_as_curated(conn, SARS)
     del curated["EY73D2C965"], curated["EYF737084C"]  # the two `N`: deleted
     added = NewDescription(
@@ -135,7 +138,7 @@ def test_diff_command_writes_files_the_write_tools_take(conn, tmp_path: Path):
     path = tmp_path / "descriptions.jsonl"
     write_descriptions(path, [*curated.values(), added])
 
-    result = run("database-diff", str(SARS), str(path))
+    result = run("diff", str(SARS), str(path))
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout.splitlines() == [
         f"PMID 22046132: {len(curated)} same",
@@ -149,15 +152,15 @@ def test_diff_command_writes_files_the_write_tools_take(conn, tmp_path: Path):
 
     # The files are those of the write tools: deleting the two `N` frees Q6VA95[1-63] for the
     # addition, which passes once they are gone.
-    removed = run("database-revise", str(tmp_path / "descriptions.delete.jsonl"), "--commit")
+    removed = run("revise", str(tmp_path / "descriptions.delete.jsonl"), "--commit")
     assert removed.returncode == 0 and "committed" in removed.stdout, removed.stdout
-    add = run("database-add", str(tmp_path / "descriptions.add.jsonl"))
+    add = run("add", str(tmp_path / "descriptions.add.jsonl"))
     assert add.returncode == 0 and "dry run passed" in add.stdout, add.stdout
 
 
-def test_diff_command_refuses_another_publication(dbname, tmp_path: Path):
+def test_diff_script_refuses_another_publication(dbname, tmp_path: Path):
     path = tmp_path / "descriptions.jsonl"
     write_descriptions(path, [NEW])
-    result = run("database-diff", str(SARS), str(path))
+    result = run("diff", str(SARS), str(path))
     assert result.returncode == 1 and "is in publication 25031347, not 22046132" in result.stderr
     assert not (tmp_path / "descriptions.add.jsonl").exists()

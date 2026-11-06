@@ -1,9 +1,10 @@
-"""The converters of curation-parse, on small samples of each file type (no network)."""
+"""The converters of `parse.py`, on small samples of each file type (no network)."""
 
 import io
 import json
 import re
 import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
@@ -643,7 +644,7 @@ def test_refused_file_writes_nothing(tmp_path: Path):
     assert [p.name for p in tmp_path.iterdir()] == ["s1.xlsx"]
 
 
-def test_command_prints_the_manifest_entries(tmp_path: Path):
+def test_parse_script_prints_the_manifest_entries(tmp_path: Path):
     """Every file listed: an image (a damaged TIFF as it is) and a file that cannot be converted
     by their file alone, why on stderr."""
     (tmp_path / "1.xml").write_text(JATS)
@@ -651,8 +652,9 @@ def test_command_prints_the_manifest_entries(tmp_path: Path):
     workbook(tmp_path / "s2.xlsx")
     (tmp_path / "s3.rtf").write_text("{\\rtf1 NS1 binds TRIM25}")
     files = ["1.xml", "s1.tif", "s2.xlsx", "s3.rtf", "s4.pdf"]
+    script = Path(__file__).parents[1] / "scripts" / "parse.py"
     done = subprocess.run(
-        ["uv", "run", "curation-parse", str(tmp_path), *files], capture_output=True, text=True
+        [sys.executable, script, str(tmp_path), *files], capture_output=True, text=True
     )
     assert done.returncode == 1
     assert done.stderr == (

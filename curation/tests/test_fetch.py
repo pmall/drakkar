@@ -1,7 +1,6 @@
-"""The routes of curation-fetch, its manifest and its report, the downloads simulated (no
+"""The routes of `fetch`, its manifest and its report, the downloads simulated (no
 network). The pages in `samples/fetch/` are real responses cut to what the routes read."""
 
-import argparse
 import dataclasses
 import email.message
 import io
@@ -27,7 +26,6 @@ from curation.fetch import (
     download,
     fetch,
     http_get,
-    parse_args,
     pmcids,
     report_lines,
 )
@@ -799,7 +797,7 @@ def test_pmc_copy_of_a_preprint_is_no_article(tmp_path: Path):
     )
 
 
-# curation-download
+# download
 
 
 def test_download_unpacks_and_converts(tmp_path: Path):
@@ -868,10 +866,3 @@ def test_download_failure(tmp_path: Path):
     url = "https://journal.org/suppl/s1.xlsx"
     assert download(tmp_path, url, Server({})) == ["HTTP 404"]  # its line starts with the URL
     assert not tmp_path.exists() or not any(tmp_path.iterdir())
-
-
-def test_an_unknown_option_is_ignored(monkeypatch: pytest.MonkeyPatch):
-    parser = argparse.ArgumentParser()
-    parser.add_argument("urls", nargs="+")
-    monkeypatch.setattr("sys.argv", ["curation-download", "https://a.org/s1.xlsx", "--limit", "5"])
-    assert parse_args(parser).urls == ["https://a.org/s1.xlsx"]

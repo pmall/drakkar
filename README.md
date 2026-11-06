@@ -24,8 +24,8 @@ The agent curates; the user supervises. The agent reads each publication, decide
 
 The repository is a uv workspace of two packages, each standing alone with its code, tests, docs and processes:
 
-- [`database/`](database/README.md), **the Drakkar database**: its structure, the commands that read, check and write it, the only way to write to it, the UniProt releases it loads and the datasets it exports. It is made for many clients and knows nothing of the curation.
-- [`curation/`](curation/README.md), **the curation**, a client of the Drakkar database: the `curate` skill, which curates one publication, the `fetch` skill, which downloads the full texts of a batch of them, the `curate-batch` skill, which curates a batch, one curator agent per publication, the `review` and `review-batch` skills, which review a curated publication or batch, and the commands that fetch and convert full texts. It reaches the database only through its commands.
+- [`database/`](database/README.md), **the Drakkar database**: its structure, the tools that read, check and write it, the only way to write to it, the UniProt releases it loads and the datasets it exports. It is made for many clients and knows nothing of the curation.
+- [`curation/`](curation/README.md), **the curation**, a client of the Drakkar database: the `curate` skill, which curates one publication, the `fetch` skill, which downloads the full texts of a batch of them, the `curate-batch` skill, which curates a batch, one curator agent per publication, the `review` and `review-batch` skills, which review a curated publication or batch, and the tools that fetch and convert full texts. It reaches the database only through its tools.
 
 [`AGENTS.md`](AGENTS.md) holds the agent's instructions: how it works with the user, writes to and queries the database, and where everything is. [`.claude/`](.claude/) links the agent and the skills of both packages for Claude Code.
 
@@ -47,7 +47,7 @@ In Claude Code, run from the repository:
 - `/review` reviews one curated publication and replies what is wrong; it writes nothing.
 - `/export` exports the derived datasets.
 
-Each skill is started by the user only; the curator and reviewer agents preload `curate` and `review`. The commands run from the repository root, `uv run <command>`; `--help` describes each.
+Each skill is started by the user only; the curator and reviewer agents preload `curate` and `review`. The tools are scripts, run by their path from the repository root, `uv run ./database/scripts/<tool>.py` or `uv run ./curation/scripts/<tool>.py`; `--help` describes each.
 
 ## Development
 

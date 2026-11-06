@@ -1,7 +1,9 @@
 """Database connection, configured from the project's `.env` file."""
 
-import argparse
 import os
+from collections.abc import Generator
+from contextlib import contextmanager
+from typing import Any
 
 import psycopg
 from dotenv import load_dotenv
@@ -21,6 +23,16 @@ def connect(*, readonly: bool = False, dbname: str | None = None) -> psycopg.Con
     )
 
 
-def parse_args(parser: argparse.ArgumentParser) -> argparse.Namespace:
-    """The arguments of a command; an option it does not define is ignored, never refused."""
-    return parser.parse_known_args()[0]
+def require_idle(conn: psycopg.Connection) -> None:
+    """Refuses a connection with a transaction in progress: a write runs in a transaction of its
+    own, which it ends itself."""
+    if conn.info.transaction_status != psycopg.pq.TransactionStatus.IDLE:
+        raise RuntimeError("the connection has a transaction in progress")
+
+
+@contextmanager
+def reading(timeout: str = "30s") -> Generator[Any]:
+    """A cursor on a read-only connection to Drakkar, each statement stopped after `timeout`."""
+    with connect(readonly=True) as conn, conn.cursor() as cur:
+        cur.execute("SELECT set_config('statement_timeout', %s, false)", (timeout,))
+        yield cur

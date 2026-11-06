@@ -33,7 +33,7 @@ select = ["E", "F", "I", "B", "UP", "SIM"]
 
 [tool.pyright]
 typeCheckingMode = "strict"
-include = ["database/src", "curation/src"]
+include = ["database/src", "database/scripts", "curation/src", "curation/scripts"]
 extraPaths = ["database/src", "curation/src"]
 
 [tool.pytest.ini_options]

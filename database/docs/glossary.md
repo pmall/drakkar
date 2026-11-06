@@ -66,7 +66,7 @@ One meaning per word, used everywhere: docs, code, reports and conversations. Wh
 | Term | Meaning |
 | -- | -- |
 | Invariant | A rule the data must follow, with an ID (`database.md#invariants`). It is checked against the snapshots a description points to, whether current or obsolete. |
-| Violation | A row that breaks an invariant, as reported by `database-check`. |
+| Violation | A row that breaks an invariant, as reported by `database/scripts/check.py`. |
 | Fix | The correction of an error found in the data, outside the regular process: a revision decided with the user (`database.md#versioning`). A malformed mapping is corrected in place, without a revision. |
 | Upgrade job | Loading a new UniProt release and moving the obsolete interactors to current snapshots. |
 | Versioning pass | The part of the upgrade job that moves the obsolete interactors of live descriptions to current snapshots, protein by protein. |

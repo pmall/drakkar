@@ -104,7 +104,7 @@ def test_sync(conn, tmp_path):
 def test_header(conn, tmp_path):
     """A file whose header is not its format is refused."""
     _write(tmp_path / "species.tsv", ["ncbi_taxon_id\tname", "694009\tSARS-CoV"])
-    with pytest.raises(SystemExit, match="the header must be"):
+    with pytest.raises(ValueError, match="the header must be"):
         sync(conn.cursor(), tmp_path)
 
 

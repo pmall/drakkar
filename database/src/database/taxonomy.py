@@ -1,11 +1,5 @@
-"""Load or update the NCBI taxonomy (`taxon`, `taxon_name`) for a UniProt release.
-
-    uv run database-taxonomy <workdir>/<release> [--commit]
-
-The first command of a release, before `database-uniprot` (`uniprot.py`), on the same directory,
-named after the release. The taxonomy is scoped by UniProt release: the dump loaded with a
-release is kept next to it, in `<workdir>/<release>/taxonomy/`, the NCBI `taxdump.tar.gz`
-unpacked (`nodes.dmp`, `names.dmp`, `merged.dmp`).
+"""Load or update the NCBI taxonomy (`taxon`, `taxon_name`) for a UniProt release: `load`, run by
+`database/scripts/taxonomy.py`, which describes it.
 
 Python port of BioSQL's `load_ncbi_taxonomy.pl --nodelete`, as the legacy drakkar-taxonomy ran it:
 
@@ -15,13 +9,10 @@ Python port of BioSQL's `load_ncbi_taxonomy.pl --nodelete`, as the legacy drakka
 - the nested set (left_value, right_value) is rebuilt from the root, children ordered by NCBI ID;
 - the names of the nodes present in the dump are replaced. Unlike the Perl script, the names
   of retired nodes are kept, so old proteins keep a scientific name;
-- `taxon.search`, all the names of a taxon in one text for `database-read taxon`, is recomputed
-  for the taxa whose names changed.
-
-Everything runs in one transaction. Without --commit, a dry run: it is rolled back.
+- `taxon.search`, all the names of a taxon in one text for the `taxon` read (`read.py`), is
+  recomputed for the taxa whose names changed.
 """
 
-import argparse
 import sys
 import time
 from collections import defaultdict
@@ -29,11 +20,13 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import LiteralString
 
-from database.db import connect
+import psycopg
+
+from database.db import require_idle
 
 NAME_MAX_LENGTH = 255
 ROOT_NCBI_TAXON_ID = 1
-# `taxon.search`: the names of a taxon, its scientific name first, for `database-read taxon`
+# `taxon.search`: the names of a taxon, its scientific name first, for the `taxon` read (`read.py`)
 # (trigram-indexed). Recomputed for the taxa of `tmp_changed`.
 SEARCH: LiteralString = """
     UPDATE taxon AS t SET search = names.search
@@ -88,12 +81,13 @@ def nested_set(rows: list[tuple[int, int | None, int]], root: int) -> dict[int, 
     return values
 
 
-def load(release_directory: Path, *, commit: bool) -> None:
+def load(conn: psycopg.Connection, release_directory: Path, *, commit: bool) -> None:
+    """Loads the taxonomy of the release in a transaction of its own, committed only with
+    `commit`, rolled back otherwise."""
     start = time.time()
     directory = release_directory / "taxonomy"
-    with connect() as conn:
-        cur = conn.cursor()
-
+    require_idle(conn)
+    with conn.cursor() as cur:
         log(start, "reading nodes.dmp")
         cur.execute("""
             CREATE TEMP TABLE tmp_nodes (
@@ -248,13 +242,3 @@ def load(release_directory: Path, *, commit: bool) -> None:
         else:
             conn.rollback()
             log(start, "dry run: rolled back")
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    parser.add_argument("release_directory", type=Path)
-    parser.add_argument("--commit", action="store_true")
-    args = parser.parse_args()
-    load(args.release_directory, commit=args.commit)

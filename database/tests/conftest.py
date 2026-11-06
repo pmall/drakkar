@@ -19,7 +19,7 @@ from database.db import connect
 
 HERE = Path(__file__).parent
 
-# Every connection of the tests, commands included, goes to the test database, never to Drakkar.
+# Every connection of the tests, scripts included, goes to the test database, never to Drakkar.
 load_dotenv()
 TEMPLATE = f"{os.environ['POSTGRES_DB']}_test_template"
 os.environ["POSTGRES_DB"] = TEMPLATE.removesuffix("_template")

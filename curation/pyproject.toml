@@ -14,13 +14,6 @@ dependencies = [
     "xlrd>=2.0.2",
 ]
 
-[project.scripts]
-curation-fetch = "curation.fetch:main"
-curation-download = "curation.fetch:download_main"
-curation-parse = "curation.parse:main"
-curation-genbank = "curation.genbank:main"
-curation-notes = "curation.notes:main"
-
 [build-system]
 requires = ["uv_build>=0.12,<0.13"]
 build-backend = "uv_build"
@@ -47,7 +40,7 @@ select = ["E", "F", "I", "B", "UP", "SIM"]
 
 [tool.pyright]
 typeCheckingMode = "strict"
-include = ["src"]
+include = ["src", "scripts"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

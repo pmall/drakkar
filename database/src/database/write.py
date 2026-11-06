@@ -1,4 +1,4 @@
-"""Write descriptions and publication states, for the write commands (`files.py`).
+"""Write descriptions and publication states, for the write tools (`files.py`).
 
 Three functions, one per kind of write: `add_descriptions`, `revise_descriptions`,
 `update_publications`; `write_batch` runs the three together.
@@ -27,6 +27,7 @@ import psycopg
 
 from database import check
 from database.align import MIN_IDENTITY, best_identity, map_sequence, read_written, written
+from database.db import require_idle
 
 
 class InvalidRow(ValueError):
@@ -146,8 +147,7 @@ def _apply_rows[T](
 
 def _write(conn: psycopg.Connection, commit: bool, apply: Callable[[Any], Applied]) -> Outcome:
     """Apply the rows in one transaction, check everything, commit or roll back."""
-    if conn.info.transaction_status != psycopg.pq.TransactionStatus.IDLE:
-        raise RuntimeError("the connection has a transaction in progress")
+    require_idle(conn)
     with conn.transaction() as tx:
         cur = conn.cursor()
         written, problems = apply(cur)

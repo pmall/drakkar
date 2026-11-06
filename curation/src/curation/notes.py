@@ -1,17 +1,9 @@
-"""The publications file of a curation batch, from its publication notes.
-
-    uv run curation-notes <dir>
-
-Writes `<dir>/publications.jsonl` from each `<dir>/<pmid>/curation.txt`, as written: one row per
-note, the PMID its directory's name, the state `selected` when the note starts with `SELECTED`,
-`curated` otherwise; an empty note gives no row. It never refuses a note: the write checks the
-file.
+"""The publications file of a curation batch, from its publication notes: `write_publications`,
+run by `curation/scripts/notes.py`, which describes it.
 """
 
-import argparse
 import json
 from pathlib import Path
-from typing import cast
 
 PUBLICATIONS = "publications.jsonl"
 NOTE = "curation.txt"
@@ -30,15 +22,10 @@ def read_notes(directory: Path) -> list[dict[str, int | str]]:
     return rows
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    parser.add_argument("dir", type=Path)
-    args = parser.parse_args()
-    directory = cast(Path, args.dir)
+def write_publications(directory: Path) -> list[dict[str, int | str]]:
+    """Writes `<dir>/publications.jsonl` from the notes of the batch, and returns its rows."""
     rows = read_notes(directory)
-    out = directory / PUBLICATIONS
-    out.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows))
-    states = [row["state"] for row in rows]
-    print(f"{states.count('curated')} curated, {states.count('selected')} selected: {out}")
+    (directory / PUBLICATIONS).write_text(
+        "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows)
+    )
+    return rows

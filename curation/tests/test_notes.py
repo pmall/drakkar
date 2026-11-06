@@ -1,19 +1,22 @@
-"""The publications file of a curation batch, from its notes, run as the command."""
+"""The publications file of a curation batch, from its notes, run as the script."""
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 
-def run(*args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(["uv", "run", *args], capture_output=True, text=True)
+def run(script: str, *args: str) -> subprocess.CompletedProcess[str]:
+    """A script of `scripts/`, run with this Python."""
+    path = Path(__file__).parents[1] / "scripts" / f"{script}.py"
+    return subprocess.run([sys.executable, path, *args], capture_output=True, text=True)
 
 
 def rows(path: Path) -> list[dict[str, int | str]]:
     return [json.loads(line) for line in path.read_text().splitlines()]
 
 
-def test_notes_command_writes_the_publications_of_a_batch(tmp_path: Path):
+def test_notes_script_writes_the_publications_of_a_batch(tmp_path: Path):
     """One row per note, the PMID its directory's name, the state from its first word, the note as
     written; a directory without a note, and the merged files, are left out."""
     notes = {
@@ -26,7 +29,7 @@ def test_notes_command_writes_the_publications_of_a_batch(tmp_path: Path):
     (tmp_path / "38566321").mkdir()  # left out of the batch: no note
     (tmp_path / "descriptions.jsonl").write_text("")
 
-    result = run("curation-notes", str(tmp_path))
+    result = run("notes", str(tmp_path))
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout == f"1 curated, 1 selected: {tmp_path / 'publications.jsonl'}\n"
     assert rows(tmp_path / "publications.jsonl") == [
@@ -35,7 +38,7 @@ def test_notes_command_writes_the_publications_of_a_batch(tmp_path: Path):
     ]
 
 
-def test_notes_command_never_refuses_a_note(tmp_path: Path):
+def test_notes_script_never_refuses_a_note(tmp_path: Path):
     """A non-empty note without the SELECTED header is `curated`, whatever it holds, left to the
     write's check; an empty note, or a directory not named by a PMID, gives no row."""
     notes = {
@@ -48,7 +51,7 @@ def test_notes_command_never_refuses_a_note(tmp_path: Path):
         (tmp_path / name).mkdir()
         (tmp_path / name / "curation.txt").write_bytes(note)
 
-    result = run("curation-notes", str(tmp_path))
+    result = run("notes", str(tmp_path))
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout == f"2 curated, 0 selected: {tmp_path / 'publications.jsonl'}\n"
     assert rows(tmp_path / "publications.jsonl") == [

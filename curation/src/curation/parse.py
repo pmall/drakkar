@@ -1,9 +1,8 @@
-"""Convert full texts and supplementary files to the texts a curation reads, short in tokens.
+"""Convert full texts and supplementary files to the texts a curation reads, short in tokens:
+`entries`, run by `curation/scripts/parse.py`, which describes it, and by `fetch.py`.
 
-    uv run curation-parse <dir> <file>...
-
-Converts each file, a path relative to `<dir>` (the publication directory), by its type, to texts
-written beside it and named by their format. No network.
+Each file is converted by its type, to texts written beside it and named by their format. No
+network.
 
 - HTML, `<file>.html`: PMC XML (title, abstract, sections, paragraphs, lists, figures, tables
   and supplementary materials; references, acknowledgements, notes and peer reviews left out), a
@@ -18,7 +17,7 @@ written beside it and named by their format. No network.
   table in a cell kept in it), figures (`figure`, `img` with its `src`, `figcaption`), labels in
   bold (`b`), `sup`, `sub`, `br`. Each block is on its own line, and so is each row of a table
   and each item of a list. An image is its file when the publication directory holds it (a PMC
-  figure in `<stem>.fig/` beside the XML, where `curation-fetch` saves them; a Word document's
+  figure in `<stem>.fig/` beside the XML, where `fetch` saves them; a Word document's
   image beside it, where `prepare` saves them), else the name, URL or path the file gives.
 - Plain text, `<file>.txt`: a PDF's text page by page (`--- page N ---`), line by line in the
   order pymupdf reads it, nothing moved; a line read right after another at the same height
@@ -33,23 +32,15 @@ written beside it and named by their format. No network.
   one, among comma, semicolon and tab, that gives the most rows the same number of fields); a file
   whose encoding is not found is refused.
 
-Each file is first made ready to read, as `curation-fetch` makes the downloads (`prepare`): a
-TIFF or a BMP image replaced by its PNG, a document's images saved beside it. Prints the entries
-of the manifest (`fetch.py`) of each file, then of its images, one JSON line each, paths relative
-to `<dir>`: `file`, then `text` and `bytes`, or `sheets`, each with `sheet`, `text` and `bytes`.
-An image has its `file` alone; so has a file that cannot be converted (a scanned PDF, a damaged
-file, a type with no converter), why on stderr, nothing written for it. A file that does not
-exist is refused.
+Each file is first made ready to read (`prepare`): a TIFF or a BMP image replaced by its PNG,
+a document's images saved beside it.
 """
 
-import argparse
 import bisect
 import csv
 import io
-import json
 import re
 import struct
-import sys
 import zipfile
 from collections import Counter
 from collections.abc import Callable, Collection, Iterable, Iterator
@@ -360,7 +351,7 @@ def _jats(
 
 def _figure_files(path: Path) -> Callable[[str], str]:
     """The image of a figure the XML names: its file in `<stem>.fig/` beside the XML, where
-    `curation-fetch` saves the PMC figures (a TIFF as PNG: found by its name without
+    `fetch` saves the PMC figures (a TIFF as PNG: found by its name without
     extension), as a path from the XML's directory; else the name the XML gives."""
     folder = path.with_name(f"{path.stem}.fig")
     files = {p.stem: f"{folder.name}/{p.name}" for p in folder.iterdir()} if folder.is_dir() else {}
@@ -1454,27 +1445,3 @@ def entries(base: Path, file: str) -> list[dict[str, Any]]:
     if not (base / file).is_file():
         raise ParseError("no such file")
     return [entry(base, ready) for ready in prepare(base, file)]
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    parser.add_argument("dir", type=Path)
-    parser.add_argument("files", nargs="+", metavar="file")
-    args = parser.parse_args()
-    refused = False
-    for file in args.files:
-        try:
-            found = entries(args.dir, file)
-        except ParseError as e:
-            print(f"{file}: not converted, {e}", file=sys.stderr)
-            refused = True
-            continue
-        for x in found:
-            if why := x.pop("not_converted", None):
-                print(f"{x['file']}: not converted, {why}", file=sys.stderr)
-                refused = True
-            print(json.dumps(x, ensure_ascii=False))
-    if refused:
-        sys.exit(1)

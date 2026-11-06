@@ -1,22 +1,11 @@
-"""Check mapping sequences on an identified entry, as the write will (`align.py`).
-
-    uv run database-mapping <accession>[:<start>-<stop>] <sequence>...
-
-Read-only, on the current snapshots. The interactor is an accession as `database-read` takes it
-(`read.py`), an isoform's refused, then its stretch. For each mapping sequence (extra end residues
-in lowercase): its extra end residues, its occurrences on each isoform with their identity, in the
-entry's numbering, and `ok`, `below 90 %` or `aligns nowhere`; a sequence over 20 residues is
-shown by its first 20 and its length. One interactor per call: an accession among the sequences
-gets its own line; an interactor that cannot be read (an isoform, coordinates outside the entry),
-a message alone. An option the command does not define is ignored, never refused.
+"""Check mapping sequences on an identified entry, as the write will (`align.py`): `mapping`,
+run by `database/scripts/mapping.py`, which describes it.
 """
 
-import argparse
 from typing import Any
 
 from database.align import MIN_IDENTITY, best_identity, map_sequence, read_written
 from database.check import AMINO_ACIDS
-from database.db import connect, parse_args
 from database.read import label_of, location, spaced
 from database.write import snapshot_of
 
@@ -79,15 +68,3 @@ def mapping(cur: Any, interactor: str, sequences: list[str]) -> str:
             f"{label_of(text)}\t{nter or '-'}\t{cter or '-'}\t{occurrences or '-'}\t{verdict}"
         )
     return "\n".join(lines)
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    parser.add_argument("interactor")
-    parser.add_argument("sequences", nargs="+")
-    args = parse_args(parser)
-    with connect(readonly=True) as conn, conn.cursor() as cur:
-        cur.execute("SET statement_timeout = '30s'")
-        print(mapping(cur, args.interactor, args.sequences))

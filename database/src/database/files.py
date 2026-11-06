@@ -1,36 +1,14 @@
-r"""The files of a pass, and the commands that write them to Drakkar or diff them against it.
+r"""The files of a pass, and the functions that write them to Drakkar or diff them against it:
+`add`, `revise`, `publications`, `batch` and `diff`, run by the scripts of the same names
+(`database/scripts/`), which describe them.
 
-    uv run database-add <file>... [--commit]
-    uv run database-revise <file>... [--commit]
-    uv run database-publications <file>... [--author <name>] [--commit]
-    uv run database-batch <dir> [--author <name>] [--commit]
-    uv run database-diff <pmid> <file>
-
-Descriptions and publication states are written only through these commands, from files. Without
-`--commit`, a command is a dry run: it applies its files, checks every invariant on the whole
-database in the same transaction, prints the result, and rolls back. With `--commit`, it commits
-only if nothing is refused and the check finds no error (`write.py`). Refused rows are reported
-with their file and line.
-
-- `database-add`: adds descriptions.
-- `database-revise`: revisions and removals, checked on the result of all the rows, so a change
-  that passes through an inconsistent state is fine (a rename carried by several descriptions, a
-  fix plus a merge).
-- `database-publications`: publication states and notes. `--author` names the author of the
-  notes.
-- `database-batch`: writes a batch from the files of its directory: `descriptions.jsonl`, the
-  descriptions to add; `descriptions.add.jsonl`, `descriptions.revise.jsonl` and
-  `descriptions.delete.jsonl`, the files `database-diff` writes beside a `descriptions.jsonl`,
-  the first read in place of `descriptions.jsonl` when it is there; and `publications.jsonl`. A
-  missing descriptions file has no rows. One transaction, in this order: the revisions and
-  removals, the new descriptions, the publication states and notes, `--author` as in
-  `database-publications`. Every invariant is checked once, on the result, so a row can rely on
-  an earlier one (an addition on a rename).
-- `database-diff`: read-only. Diffs the descriptions of the file (descriptions to add, all of one
-  publication) against the live descriptions of that publication in its vh run (`diff.py`), and
-  writes beside the file what writing it would change: `<name>.add.jsonl`, the descriptions to
-  add; `<name>.revise.jsonl`, the descriptions to revise, as `revise` rows;
-  `<name>.delete.jsonl`, the descriptions to remove, as `remove` rows.
+Descriptions and publication states are written only through these functions, from files. Without
+`commit`, a write is a dry run: it applies its files, checks every invariant on the whole database
+in the same transaction, and rolls back. With `commit`, it commits only if nothing is refused and
+the check finds no error (`write.py`). A write returns its report and whether it passed: the
+refused rows, with their file and line, the errors the check finds, the warnings on the rows
+written, then `<n> rows, <n> applied: committed`, `dry run passed, rolled back` or `failed, rolled
+back`. A file that cannot be read raises `FileError`, with its file and line.
 
 The files are JSON Lines: one JSON object per line, with every key of its format and no other
 (`ADD`, `REVISE`, `PUBLICATIONS`), its values in JSON types. No header: an empty file has no row,
@@ -61,14 +39,13 @@ Publications (`*.jsonl`), one line per publication whose state or note changes, 
     {"pmid": 35939498, "state": "curated", "note": "CURATED ..."}
 """
 
-import argparse
 import json
-import sys
 from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
 from typing import Any, cast
 
-from database.db import connect
+import psycopg
+
 from database.diff import diff_descriptions
 from database.write import (
     Description,
@@ -96,7 +73,7 @@ ADD = ["pmid", *DESCRIPTION, "note"]
 REVISE = ["stable_id", "version", "pmid", "action", "into", *DESCRIPTION, "note"]
 PUBLICATIONS = ["pmid", "state", "note"]
 # The files of a batch: the descriptions to add and the publications, and the files of
-# `database-diff`; a descriptions file may be missing. Of the additions, only the first present is
+# `diff`; a descriptions file may be missing. Of the additions, only the first present is
 # read: the descriptions.add.jsonl of a diff is written beside the descriptions.jsonl it comes
 # from.
 BATCH_REVISIONS = ["descriptions.revise.jsonl", "descriptions.delete.jsonl"]
@@ -286,7 +263,7 @@ def write_revisions(path: Path, items: Sequence[Revision]) -> None:
     _write_lines(path, map(format_revision, items))
 
 
-# --- Commands -----------------------------------------------------------------------------------
+# --- Tools --------------------------------------------------------------------------------------
 
 
 def report(outcome: Outcome, wheres: Sequence[str]) -> str:
@@ -318,97 +295,72 @@ def report(outcome: Outcome, wheres: Sequence[str]) -> str:
     return "\n".join(lines)
 
 
-def _command(
+def _write(
     read: Callable[[Sequence[Path]], list[tuple[str, Any]]],
     write: Callable[..., Outcome],
-    author: bool = False,
-) -> None:
-    """A write command on files; with `author`, it takes `--author` for the publication notes."""
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    parser.add_argument("files", type=Path, nargs="*")
-    if author:
-        parser.add_argument("--author", default="")
-    parser.add_argument("--commit", action="store_true")
-    args = parser.parse_args()
-    options = {"author": args.author} if author else {}
-    try:
-        rows = read(cast(list[Path], args.files))
-        with connect() as conn:
-            outcome = write(conn, [item for _, item in rows], commit=args.commit, **options)
-    except ValueError as e:  # a file error, or a stable ID given twice
-        sys.exit(str(e))
-    print(report(outcome, [where for where, _ in rows]))
-    sys.exit(0 if outcome.ok else 1)
+    conn: psycopg.Connection,
+    paths: Sequence[Path],
+    **options: Any,
+) -> tuple[str, bool]:
+    """The report of a write of files, and whether it passed."""
+    rows = read(paths)
+    outcome = write(conn, [item for _, item in rows], **options)
+    return report(outcome, [where for where, _ in rows]), outcome.ok
 
 
-def add_main() -> None:
-    _command(read_descriptions, add_descriptions)
+def add(conn: psycopg.Connection, paths: Sequence[Path], *, commit: bool) -> tuple[str, bool]:
+    """Adds the descriptions of the files."""
+    return _write(read_descriptions, add_descriptions, conn, paths, commit=commit)
 
 
-def revise_main() -> None:
-    _command(read_revisions, revise_descriptions)
+def revise(conn: psycopg.Connection, paths: Sequence[Path], *, commit: bool) -> tuple[str, bool]:
+    """Revises and removes the descriptions of the files, checked on the result of all rows."""
+    return _write(read_revisions, revise_descriptions, conn, paths, commit=commit)
 
 
-def publications_main() -> None:
-    _command(read_publications, update_publications, True)
+def publications(
+    conn: psycopg.Connection, paths: Sequence[Path], *, author: str, commit: bool
+) -> tuple[str, bool]:
+    """Writes the publication states and notes of the files, `author` the notes' author."""
+    return _write(read_publications, update_publications, conn, paths, author=author, commit=commit)
 
 
-def batch_main() -> None:
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    parser.add_argument("dir", type=Path)
-    parser.add_argument("--author", default="")
-    parser.add_argument("--commit", action="store_true")
-    args = parser.parse_args()
-    directory = cast(Path, args.dir)
+def batch(
+    conn: psycopg.Connection, directory: Path, *, author: str, commit: bool
+) -> tuple[str, bool]:
+    """Writes a batch from the files of its directory, in one transaction: the revisions and
+    removals, the new descriptions, then the publication states and notes."""
 
     def present(names: list[str]) -> list[Path]:
         return [directory / name for name in names if (directory / name).exists()]
 
-    try:
-        revision_rows = read_revisions(present(BATCH_REVISIONS))
-        addition_rows = read_descriptions(present(BATCH_ADDITIONS)[:1])
-        publication_rows = read_publications([directory / BATCH_PUBLICATIONS])
-        with connect() as conn:
-            outcome = write_batch(
-                conn,
-                [item for _, item in revision_rows],
-                [item for _, item in addition_rows],
-                [item for _, item in publication_rows],
-                author=args.author,
-                commit=args.commit,
-            )
-    except ValueError as e:  # a file error, or a stable ID given twice
-        sys.exit(str(e))
-    wheres = [where for where, _ in [*revision_rows, *addition_rows, *publication_rows]]
-    print(report(outcome, wheres))
-    sys.exit(0 if outcome.ok else 1)
-
-
-def diff_main() -> None:
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    revision_rows = read_revisions(present(BATCH_REVISIONS))
+    addition_rows = read_descriptions(present(BATCH_ADDITIONS)[:1])
+    publication_rows = read_publications([directory / BATCH_PUBLICATIONS])
+    outcome = write_batch(
+        conn,
+        [item for _, item in revision_rows],
+        [item for _, item in addition_rows],
+        [item for _, item in publication_rows],
+        author=author,
+        commit=commit,
     )
-    parser.add_argument("pmid", type=int)
-    parser.add_argument("file", type=Path)
-    args = parser.parse_args()
-    path = cast(Path, args.file)
-    try:
-        items = [item for _, item in read_descriptions([path])]
-        with connect(readonly=True) as conn, conn.cursor() as cur:
-            cur.execute("SET statement_timeout = '30s'")
-            diff = diff_descriptions(cur, args.pmid, items)
-    except ValueError as e:  # a file error, a publication in no vh run, or another publication
-        sys.exit(str(e))
+    wheres = [where for where, _ in [*revision_rows, *addition_rows, *publication_rows]]
+    return report(outcome, wheres), outcome.ok
+
+
+def diff(cur: Any, pmid: int, path: Path) -> str:
+    """Diffs the descriptions of the file against the live descriptions of the publication, writes
+    beside the file what writing it would change, and says what it wrote. A publication in no vh
+    run, or a file of another publication, raises `ValueError`."""
+    items = [item for _, item in read_descriptions([path])]
+    found = diff_descriptions(cur, pmid, items)
     stem = path.with_suffix("")
-    print(f"PMID {args.pmid}: {len(diff.same)} same")
     added = stem.with_name(f"{stem.name}.add.jsonl")
-    write_descriptions(added, diff.added)
-    print(f"{len(diff.added)} to add: {added}")
-    for kind, revisions in (("revise", diff.revised), ("delete", diff.deleted)):
+    write_descriptions(added, found.added)
+    lines = [f"PMID {pmid}: {len(found.same)} same", f"{len(found.added)} to add: {added}"]
+    for kind, revisions in (("revise", found.revised), ("delete", found.deleted)):
         out = stem.with_name(f"{stem.name}.{kind}.jsonl")
         write_revisions(out, revisions)
-        print(f"{len(revisions)} to {kind}: {out}")
+        lines.append(f"{len(revisions)} to {kind}: {out}")
+    return "\n".join(lines)

@@ -1,10 +1,8 @@
 """Download the full text of a publication, as published, with its supplementary files, and
-convert them to text for the curation; or one file, at a URL.
+convert them to text for the curation; or one file, at a URL: `fetch` and `download`, run by
+`curation/scripts/fetch.py` and `curation/scripts/download.py`, which describe them.
 
-    uv run curation-fetch <dir> <pmid>
-    uv run curation-download <dir> <url>...
-
-`curation-fetch` downloads the full text in three steps. Each step is a list of routes, each route
+`fetch` downloads the full text in three steps. Each step is a list of routes, each route
 answering yes or no by one test.
 
 1. Access: the article is free when it has a PMCID, when OpenAlex or Unpaywall list a free copy,
@@ -26,13 +24,13 @@ answering yes or no by one test.
    then Europe PMC's supplementary files service. Archives are unpacked. A video, the Reporting
    Summary and the peer review file (both by their caption) are skipped. A file over 100 MB is
    never downloaded, by the size the server announces or once its download passes 100 MB, nor
-   read from Europe PMC's archive: it is left to a download by hand (`curation-download`), when
+   read from Europe PMC's archive: it is left to a download by hand (`download`), when
    judged needed.
 
 It writes the article, `<pmid>.xml`, `<pmid>.html` or `<pmid>.pdf`, the supplementary files in
 `<pmid>.supp/`, and the article's figures, the other images of the PMC open access files, in
 `<pmid>.fig/`. Then the parser (`parse.py`) makes each file ready to read (`prepare`) and
-converts it as `curation-parse` does: a TIFF or a BMP image replaced by its PNG, one file per
+converts it as `parse.py` does: a TIFF or a BMP image replaced by its PNG, one file per
 image it holds (`<name>-<n>.png` when several), which the Read tool reads; a Word document, a
 workbook or a presentation (`.docx`, `.xlsx`, `.xlsm`, `.pptx`) kept, with each image it holds
 (its `media` folder, its videos left out) saved beside it, `<file>.<image>`; each file but an
@@ -41,33 +39,17 @@ image converted, its texts beside it; an image read as it is.
 Last, when the article was downloaded, the manifest `manifest.json`, every file downloaded:
 `article`, with `file`, the original, `text`, its text, and `bytes`, the size of the text;
 `supplements`, each with the `name` the article gives it (the images of an archive or a document
-under its name), `file`, then `text` and `bytes`, or for a spreadsheet `sheets`, each with
-`sheet`, its name, `text` and `bytes`; `figures`, the paths of the figures. An image, or a file
-that could not be converted, has its `file` alone. Paths are relative to `<dir>`. A publication
-directory set up from files the user provides holds the same: each file converted with
-`curation-parse`, which prints its entries, and the manifest in this format, `bytes` optional.
-
-It prints its report. First a line saying where the article comes from: `Full text: <PMCID>
-(<license>)` or `Full text: <source> (<license>, <URL>)`, ending with `, supplementary files
-missing: <names>` when some are, then `, supplementary files over 100 MB: <names>` when some are;
-without the article, `Full text: closed — <why>`, or `Full text: not downloaded — <why>` when it
-is free but no copy could be downloaded, then every route tried with its outcome. Then one line
-per file that could not be converted, with why, per supplementary file missing, with every place
-tried, and per supplementary file over 100 MB, with its size when announced and its URL.
-
-`curation-download` saves the file at each URL, whatever its size (a supplementary file the article
-links to, a commercial construct's page or datasheet) in `<dir>` (the type from the response when
-its name gives none), an archive unpacked (its videos left out), a document's images saved beside
-it, each file but an image converted beside it, as `curation-parse` does; a TIFF or a BMP image
-saved as PNG. Under a `#` header, one line per file, starting with its URL: its entry, as in the
-manifest, in JSON, its paths starting with `<dir>` (an image: `file` alone), or why it could not be
-had (the HTTP outcome, not converted). It ignores an option it does not define, never refuses it.
+under its name), `file`, then `text` and `bytes`, or for a spreadsheet `sheets`, each with `sheet`,
+its name, `text` and `bytes`; `figures`, the paths of the figures. An image, or a file that could
+not be converted, has its `file` alone. Paths are relative to `<dir>`. A publication directory set
+up from files the user provides holds the same: each file converted with
+`curation/scripts/parse.py`, which prints its entries, and the manifest in this format, `bytes`
+optional.
 
 Configuration, in the project's `.env`: `UNPAYWALL_EMAIL`, the address Unpaywall asks for to
 answer a request. Without it Unpaywall is not asked at all.
 """
 
-import argparse
 import io
 import json
 import mimetypes
@@ -108,7 +90,7 @@ UNPAYWALL = "https://api.unpaywall.org/v2"
 PMC_AWS = "https://pmc-oa-opendata.s3.amazonaws.com"
 PMC_PAGE = "https://pmc.ncbi.nlm.nih.gov/articles"
 # Publishers refuse requests without a browser user agent.
-USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0 curation-fetch"
+USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0"
 TIMEOUT = 30
 SUPPLEMENT_SUFFIXES = {
     ".xlsx",
@@ -961,29 +943,3 @@ def download(out: Path, url: str, get: Get = http_get) -> list[str]:
             else:
                 lines.append(json.dumps(found, ensure_ascii=False))
     return lines
-
-
-def parse_args(parser: argparse.ArgumentParser) -> argparse.Namespace:
-    """The arguments of a command; an option it does not define is ignored, never refused."""
-    return parser.parse_known_args()[0]
-
-
-def download_main() -> None:
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    parser.add_argument("dir", type=Path)
-    parser.add_argument("urls", nargs="+")
-    args = parse_args(parser)
-    lines = [f"{url}\t{line}" for url in args.urls for line in download(args.dir, url)]
-    print("\n".join(["#url\tmanifest entry, or why", *lines]))
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    parser.add_argument("dir", type=Path)
-    parser.add_argument("pmid", type=int)
-    args = parser.parse_args()
-    print("\n".join(report_lines(fetch(args.dir, args.pmid))))

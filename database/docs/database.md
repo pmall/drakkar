@@ -59,8 +59,8 @@ Y2H, see table S2
 - A description: `association_id` (publication), `method_id`, human interactor (`protein1_id`, `start1`, `stop1`, `name1`), viral interactor (`protein2_id`, `start2`, `stop2`, `name2` = generic name), `mapping1/2` (mapped sequences with their occurrences on each isoform, JSON).
 - An interactor is (accession, start, stop); the accession is reached through `proteins.id`, which points to one snapshot of the entry.
 - **Nothing is ever deleted.** A revision deletes the live version (`deleted_at`) and inserts the next version under the same stable ID at the same instant; a removal deletes the live version with no successor. A stable ID never changes and keeps its publication (V6); uniqueness (D5) applies to live versions only.
-- **Errors in the data** (invariant violations) should not happen: every write is checked. An error found anyway is fixed outside the regular process, decided with the user: a fix corrects a description against its own snapshots, never moves it to another snapshot (that is the versioning pass), and goes through `database-revise` with a `FIXED` note. A malformed mapping (D11) is corrected in place, without a revision, on every version that has it: its values stay the same and nothing else in the row changes.
-- **Writes**: descriptions and publication states are written only by the write commands, which check each row and every invariant (`#invariants`) on the result before they commit. What each write checks, derives and refuses is in `database/src/database/write.py`, its files in `files.py`.
+- **Errors in the data** (invariant violations) should not happen: every write is checked. An error found anyway is fixed outside the regular process, decided with the user: a fix corrects a description against its own snapshots, never moves it to another snapshot (that is the versioning pass), and goes through `database/scripts/revise.py` with a `FIXED` note. A malformed mapping (D11) is corrected in place, without a revision, on every version that has it: its values stay the same and nothing else in the row changes.
+- **Writes**: descriptions and publication states are written only by the write scripts, which check each row and every invariant (`#invariants`) on the result before they commit. What each write checks, derives and refuses is in `database/src/database/write.py`, its files in `files.py`.
 - Moving an interactor to the current snapshot of the same accession is the versioning pass, not a revision.
 
 ## UniProt versioning <a id="uniprot"></a>
@@ -73,7 +73,7 @@ Y2H, see table S2
 
 ### Releases
 
-A release is loaded by its commands, the NCBI taxonomy first, then UniProt: `database/src/database/taxonomy.py`, and `uniprot.py`, which says when an entry keeps its snapshot. UniProt keeps only Swiss-Prot and the TrEMBL entries of reference proteomes: human Swiss-Prot entries are mostly updated in place, viral entries used by descriptions are often deleted. An entry whose taxon is missing from the taxonomy is imported, and the taxon is not added (R3). The descriptions on a snapshot that becomes obsolete are left to the versioning pass.
+A release is loaded by its scripts, the NCBI taxonomy first, then UniProt: `database/scripts/taxonomy.py`, and `uniprot.py`, which says when an entry keeps its snapshot. UniProt keeps only Swiss-Prot and the TrEMBL entries of reference proteomes: human Swiss-Prot entries are mostly updated in place, viral entries used by descriptions are often deleted. An entry whose taxon is missing from the taxonomy is imported, and the taxon is not added (R3). The descriptions on a snapshot that becomes obsolete are left to the versioning pass.
 
 **An accession can have several snapshots, and several obsolete ones**: one per release where its entry changed. Different descriptions, or different versions of one description, can use different snapshots of the same accession. So any comparison about a description (sequence, length, gene name, taxon) uses the snapshot the description points to (`protein1_id`, `protein2_id`), never "the latest old snapshot" of the accession. Example: a protein with an older, longer snapshot used by a live description and a later, shorter one: comparing the later one with another entry can wrongly say "same sequence".
 
@@ -81,7 +81,7 @@ After a versioning pass, the obsolete snapshots that no description row referenc
 
 ## Invariants <a id="invariants"></a>
 
-Checked by `database-check` (`database/src/database/check.py`) and inside every write (`#versioning`). Scope: vh and hh. "Live" = `deleted_at IS NULL`. Severity: **error** = must never happen; **warning** = needs a look; **upgrade** = an obsolete interactor, left to the versioning pass; **info** = good to know. Invariants judge a description against the snapshots it points to, current or obsolete. The method chosen is not checked.
+Checked by `database/scripts/check.py` and inside every write (`#versioning`). Scope: vh and hh. "Live" = `deleted_at IS NULL`. Severity: **error** = must never happen; **warning** = needs a look; **upgrade** = an obsolete interactor, left to the versioning pass; **info** = good to know. Invariants judge a description against the snapshots it points to, current or obsolete. The method chosen is not checked.
 
 | ID | Invariant | Severity |
 | -- | -- | -- |

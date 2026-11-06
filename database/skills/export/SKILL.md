@@ -13,7 +13,7 @@ The derived datasets are files for other applications, exported from the live de
 The export takes the vh runs up to a run, in the order of their IDs (`runs.id`); hh is always whole. The user names the cut run by its name, as always; the command takes its ID. Take the cut from the user's request; otherwise show the vh runs still being curated, with their publications neither curated nor discarded, and agree the cut with the user before going on:
 
 ```
-uv run database-read sql "SELECT r.id, r.name, count(*) AS publications FROM runs AS r JOIN associations AS a ON a.run_id = r.id WHERE r.type = 'vh' AND a.state IN ('pending', 'selected') GROUP BY r.id, r.name ORDER BY r.id"
+uv run ./database/scripts/read.py sql "SELECT r.id, r.name, count(*) AS publications FROM runs AS r JOIN associations AS a ON a.run_id = r.id WHERE r.type = 'vh' AND a.state IN ('pending', 'selected') GROUP BY r.id, r.name ORDER BY r.id"
 ```
 
 When the user asks only to update the generic viral proteins, skip this step and stop after the next one.
@@ -29,13 +29,13 @@ The files of `database/generic/`, tab-separated under a header line:
 
 The species of a viral interactor is given by the deepest taxon at or above its taxon in `species.tsv` (that taxon) or `placed.tsv` (the species it is placed in).
 
-1. **Sync**: `uv run database-generic sync database/generic/`. It refreshes the families and publication counts, removes the names the dataset no longer has, adds the new ones with an empty `protein`, and prints what to decide. Run it again after each change: the files are in step when it prints `nothing`.
+1. **Sync**: `uv run ./database/scripts/generic.py sync database/generic/`. It refreshes the families and publication counts, removes the names the dataset no longer has, adds the new ones with an empty `protein`, and prints what to decide. Run it again after each change: the files are in step when it prints `nothing`.
 
 2. **Taxa**:
 
    One virus is one species, as one protein is one node.
 
-   - `taxon under no species`, with its lineage up to its family and its names. A virus already listed, which the NCBI taxonomy keeps outside its species (an old species beside its successor, an unclassified taxon such as `Human bocavirus`): a line in `placed.tsv`, once its entries show which virus it is (`uv run database-read closest <sequence> --taxon <species ID>`, a sequence of `uv run database-read seq <accession>`). A new virus: a line in `species.tsv` for the taxon that is the virus, usually the NCBI species of the lineage. An NCBI species is split only where publications name its viruses apart, as `README.md` records (SARS-CoV-2 and SARS-CoV, each dengue serotype, each papillomavirus type); a new split or placement goes in `README.md`.
+   - `taxon under no species`, with its lineage up to its family and its names. A virus already listed, which the NCBI taxonomy keeps outside its species (an old species beside its successor, an unclassified taxon such as `Human bocavirus`): a line in `placed.tsv`, once its entries show which virus it is (`uv run ./database/scripts/read.py closest <sequence> --taxon <species ID>`, a sequence of `uv run ./database/scripts/read.py seq <accession>`). A new virus: a line in `species.tsv` for the taxon that is the virus, usually the NCBI species of the lineage. An NCBI species is split only where publications name its viruses apart, as `README.md` records (SARS-CoV-2 and SARS-CoV, each dengue serotype, each papillomavirus type); a new split or placement goes in `README.md`.
    - A taxon missing from the NCBI taxonomy (`not in the NCBI taxonomy`): a line in `placed.tsv`, its species found from its entries and its name (a strain of a listed virus).
    - `placed, now under its species in the NCBI taxonomy`: remove its line from `placed.tsv`.
    - `species not in the NCBI taxonomy`: the taxon left NCBI; its line takes the taxon that replaced it.
@@ -51,13 +51,13 @@ The species of a viral interactor is given by the deepest taxon at or above its 
 
    Do your best for the best dataset at a reasonable cost: a few lookups when a name is unclear, not an exhaustive check.
 
-   Evidence, read-only: `uv run database-read names <species ID>` (the generic names under the species, with their live descriptions and most used interactors), `uv run database-read entry <accession>` (gene names, chains, the generic names on the entry).
+   Evidence, read-only: `uv run ./database/scripts/read.py names <species ID>` (the generic names under the species, with their live descriptions and most used interactors), `uv run ./database/scripts/read.py entry <accession>` (gene names, chains, the generic names on the entry).
 
 4. **`protein named elsewhere`**: a name's protein is a name of the species mapped to another protein; make the group's lines agree.
 
 ## The export
 
-`uv run database-export database/generic/ <workdir>/exports/ --run <id>`. Read-only on the database, it refuses to write anything while `database/generic/` is not in step. It writes five datasets, each as a `.tsv` and an `.xlsx` file named after the cut run (`descriptions_vh_run87.tsv`): `descriptions_hh`, `descriptions_vh`, `interactors_viral` (the sequence of each viral interactor), `mappings_h` and `mappings_v`; it prints the runs exported and the lines of each, then checks the files, read back, against each other and against the database: the numbers (live descriptions = exported + left out, a human interactor not up to date; mappings = lines + merged in homodimers), then `ok` or the failures, with an error.
+`uv run ./database/scripts/export.py database/generic/ <workdir>/exports/ --run <id>`. Read-only on the database, it refuses to write anything while `database/generic/` is not in step. It writes five datasets, each as a `.tsv` and an `.xlsx` file named after the cut run (`descriptions_vh_run87.tsv`): `descriptions_hh`, `descriptions_vh`, `interactors_viral` (the sequence of each viral interactor), `mappings_h` and `mappings_v`; it prints the runs exported and the lines of each, then checks the files, read back, against each other and against the database: the numbers (live descriptions = exported + left out, a human interactor not up to date; mappings = lines + merged in homodimers), then `ok` or the failures, with an error.
 
 ## Reply
 

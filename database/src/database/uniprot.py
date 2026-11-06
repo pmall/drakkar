@@ -1,43 +1,12 @@
-"""Upgrade the Drakkar proteins to a new UniProt release.
-
-    uv run database-uniprot parse <workdir>/<release>
-    uv run database-uniprot upgrade <workdir>/<release> [--commit]
-
-Run after `database-taxonomy` (`taxonomy.py`), on the same directory, named after the release.
+"""Upgrade the Drakkar proteins to a new UniProt release: `parse` and `upgrade`, run by
+`database/scripts/uniprot.py`, which describes them.
 
 Python port of the legacy Perl import, drakkar-uniprot (`bin/proteins`, `bin/metadata`,
-`bin/import/proteins`), reading the UniProt FTP files instead of website search results:
-
-- `uniprot_sprot_human.xml.gz` (human, Swiss-Prot), `uniprot_sprot_viruses.xml.gz` and
-  `uniprot_trembl_viruses.xml.gz` (all viruses), `uniprot_sprot_varsplic.fasta.gz` (isoforms).
-
-Files are scoped by release: `<workdir>/<release>/` holds `taxonomy/` (the NCBI taxdump loaded with
-this release), `uniprot/` (the FTP files and their parsed TSV) and `reports/`.
-
-Two steps:
-
-1. `parse`: each XML file of `uniprot/` is converted into a TSV file next to it; one already
-   there is kept.
-2. `upgrade`: the TSV files are staged, then, in one transaction (without `--commit`, a dry run
-   that rolls back):
-   - an entry keeps its existing snapshot, and the descriptions on it stay valid, when the
-     snapshot is unchanged: same accession, same taxon, exactly the same isoform sequences, and
-     for a human entry the same primary gene name, as a curation relies on it (viral names are
-     not compared, the curator setting the generic name independently of UniProt; description
-     changes are ignored); any other entry gets a new `proteins` row, its old snapshot obsolete;
-   - `proteins_versions` is rebuilt: one row per entry of the release, pointing to its snapshot,
-     new or kept, with whether it is in Swiss-Prot (`reviewed`) and its secondary accessions; an
-     accession removed from UniProt (deleted, merged, demerged) gets no row, its snapshots
-     obsolete too;
-   - the reports: `reports/uniprot_upgrade.md`, what changed, with the entries whose taxon is
-     missing from the taxonomy, and `reports/obsolete_vh_descriptions.tsv`, the descriptions that
-     need a revision.
-
-Unlike the Perl import, entries whose taxon is missing from `taxon` are imported (and reported)
-instead of silently skipped: the type (human or viral) comes from the file.
+`bin/import/proteins`), reading the UniProt FTP files instead of website search results. Unlike
+the Perl import, entries whose taxon is missing from `taxon` are imported (and reported) instead of
+silently skipped: the type (human or viral) comes from the file.
 """
 
-import argparse
 import csv
 import gzip
 import json
@@ -49,10 +18,11 @@ from multiprocessing import Pool
 from pathlib import Path
 from typing import Any, LiteralString
 
+import psycopg
 from lxml import etree
 from lxml.etree import _Element  # pyright: ignore[reportPrivateUsage]
 
-from database.db import connect
+from database.db import require_idle
 
 VARSPLIC = "uniprot_sprot_varsplic.fasta.gz"
 SOURCES = {
@@ -307,17 +277,20 @@ def fetch_table(cur: Any, sql: LiteralString) -> tuple[list[str], list[tuple[Any
     return [c.name for c in cur.description], cur.fetchall()
 
 
-def upgrade(release_directory: Path, *, commit: bool) -> None:
+def upgrade(conn: psycopg.Connection, release_directory: Path, *, commit: bool) -> str:
+    """Upgrades the proteins to the release of the directory in a transaction of its own,
+    committed only with `commit`, rolled back otherwise, then refreshes the dataset after a commit;
+    returns its report. A release already in `proteins` raises `ValueError`."""
     start = time.time()
     release = release_directory.resolve().name
     directory = release_directory / "uniprot"
     reports = release_directory / "reports"
     reports.mkdir(exist_ok=True)
-    with connect() as conn:
-        cur = conn.cursor()
+    require_idle(conn)
+    with conn.cursor() as cur:
         cur.execute("SELECT 1 FROM proteins WHERE version = %s LIMIT 1", (release,))
         if cur.fetchone():
-            sys.exit(f"release {release} is already in proteins")
+            raise ValueError(f"release {release} is already in proteins")
 
         stage(cur, directory, start)
 
@@ -434,7 +407,7 @@ def upgrade(release_directory: Path, *, commit: bool) -> None:
             """,
         )
 
-        write_report(reports / "uniprot_upgrade.md", release, not commit, headers, report)
+        text = write_report(reports / "uniprot_upgrade.md", release, not commit, headers, report)
         with (reports / "obsolete_vh_descriptions.tsv").open("w") as f:
             writer = csv.writer(f, delimiter="\t", lineterminator="\n")
             writer.writerow(details_header)
@@ -449,6 +422,7 @@ def upgrade(release_directory: Path, *, commit: bool) -> None:
         else:
             conn.rollback()
             log(start, "dry run: rolled back")
+    return text
 
 
 def write_report(
@@ -457,7 +431,8 @@ def write_report(
     dry_run: bool,
     headers: dict[str, list[str]],
     report: dict[str, list[tuple[Any, ...]]],
-) -> None:
+) -> str:
+    """Writes the report of an upgrade, and returns it."""
     titles = {
         "entries": "Entries of the release",
         "missing_taxa": "Entries whose taxon is missing from `taxon` (imported anyway)",
@@ -471,21 +446,4 @@ def write_report(
         lines += ["| " + " | ".join(str(v) for v in row) + " |" for row in report[key]]
         lines.append("")
     path.write_text("\n".join(lines))
-    print("\n".join(lines))
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    commands = parser.add_subparsers(dest="command", required=True)
-    parse_parser = commands.add_parser("parse")
-    parse_parser.add_argument("release_directory", type=Path)
-    upgrade_parser = commands.add_parser("upgrade")
-    upgrade_parser.add_argument("release_directory", type=Path)
-    upgrade_parser.add_argument("--commit", action="store_true")
-    args = parser.parse_args()
-    if args.command == "parse":
-        parse(args.release_directory)
-    else:
-        upgrade(args.release_directory, commit=args.commit)
+    return "\n".join(lines)

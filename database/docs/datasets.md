@@ -6,7 +6,7 @@ Drakkar is the curation database. Derived datasets are exported from it for othe
 
 ## Drakkar is consistent at the UniProt entry level
 
-Each description is exact on its UniProt entries, whatever their version: the snapshot it points to keeps the interactions and the mappings as they were recorded at the time of curation. Drakkar does not reconcile entries or strains: the derived datasets do, when they need to. What each dataset holds, its files and its columns are in `database/src/database/export.py`.
+Each description is exact on its UniProt entries, whatever their version: the snapshot it points to keeps the interactions and the mappings as they were recorded at the time of curation. Drakkar does not reconcile entries or strains: the derived datasets do, when they need to. What each dataset holds, its files and its columns are in `database/scripts/export.py`.
 
 ## Generic viral proteins <a id="generic"></a>
 

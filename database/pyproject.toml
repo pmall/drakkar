@@ -12,20 +12,6 @@ dependencies = [
     "python-dotenv>=1.2.4",
 ]
 
-[project.scripts]
-database-taxonomy = "database.taxonomy:main"
-database-uniprot = "database.uniprot:main"
-database-check = "database.check:main"
-database-add = "database.files:add_main"
-database-revise = "database.files:revise_main"
-database-publications = "database.files:publications_main"
-database-diff = "database.files:diff_main"
-database-batch = "database.files:batch_main"
-database-read = "database.read:main"
-database-mapping = "database.mapping:main"
-database-generic = "database.generic:main"
-database-export = "database.export:main"
-
 [build-system]
 requires = ["uv_build>=0.12,<0.13"]
 build-backend = "uv_build"
@@ -50,7 +36,7 @@ select = ["E", "F", "I", "B", "UP", "SIM"]
 
 [tool.pyright]
 typeCheckingMode = "strict"
-include = ["src"]
+include = ["src", "scripts"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

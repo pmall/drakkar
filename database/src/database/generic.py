@@ -1,8 +1,6 @@
 """The generic viral proteins of the vh descriptions dataset: the files of their directory kept in
 step with Drakkar (read-only on the database).
 
-    uv run database-generic sync <dir>
-
 The vh descriptions dataset is `descriptions_vh` (`export.py`). Its generic viral proteins are
 three files, versioned in git in `database/generic/`, tab-separated under a header
 line:
@@ -23,23 +21,15 @@ line:
 The species of a viral interactor is given by the deepest taxon at or above its taxon in
 `species.tsv` (that taxon) or `placed.tsv` (the species it is placed in).
 
-`sync` rewrites the three files of the directory, sorted, and from Drakkar the families and
-publications of `species.tsv` and the names of `proteins.tsv`: the names the dataset no longer
-has are removed, the new ones added with an empty `protein`. It prints the counts, the names
-removed, then what a person decides, or `nothing`: a species missing from the NCBI taxonomy; a
-placed taxon now under its species in it (its line can go); a taxon under no species, with its
-lineage and its names; a name with no protein; a name whose protein is a name of the species
-mapped to another protein. A file whose header is not its format is refused.
+`sync` keeps them in step, run by `database/scripts/generic.py`, which describes it.
 """
 
-import argparse
 import csv
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
 from database import read
-from database.db import connect
 
 SPECIES = ["family_ncbi_taxon_id", "ncbi_taxon_id", "name", "publications"]
 PLACED = ["ncbi_taxon_id", "species_ncbi_taxon_id", "name"]
@@ -53,7 +43,7 @@ def _read(path: Path, columns: list[str]) -> list[dict[str, str]]:
     with path.open(newline="") as f:
         reader = csv.DictReader(f, delimiter="\t")
         if reader.fieldnames != columns:
-            raise SystemExit(f"{path}: the header must be {' '.join(columns)}")
+            raise ValueError(f"{path}: the header must be {' '.join(columns)}")
         return list(reader)
 
 
@@ -249,16 +239,3 @@ def sync(cur: Any, directory: Path) -> str:
     if lines[-1] == "To decide:":
         lines.append("nothing")
     return "\n".join(lines)
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    commands = parser.add_subparsers(dest="command", required=True)
-    s = commands.add_parser("sync")
-    s.add_argument("directory", type=Path)
-    args = parser.parse_args()
-    with connect(readonly=True) as conn, conn.cursor() as cur:
-        cur.execute("SET statement_timeout = '30s'")
-        print(sync(cur, args.directory))

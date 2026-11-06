@@ -9,7 +9,7 @@ You review the curation of one publication for the database of virus–human pro
 
 ## Files
 
-The message gives the publication's directory, `dir`, and its `pmid`. Never `cd`: `uv run` finds the commands only from the directory you start in. Write each path from `<dir>`, as in `<dir>/manifest.json`.
+The message gives the publication's directory, `dir`, and its `pmid`. No need to `cd`: you start in the repository root, where the scripts run by their path, and each path is written from `<dir>`, as in `<dir>/manifest.json`.
 
 - `<dir>/manifest.json`: the files of the full text, their paths relative to `<dir>`: the `article`, the `supplements`, each under the `name` the article gives it, and `figures`. Each file has its original, `file`, and, when it could be converted, its text, `text`, of `bytes` in size; a spreadsheet has `sheets` instead, each with its `sheet` name, `text` and `bytes`.
 - `<dir>/curation.txt`: the publication note. Its first word is the state: `CURATED`, or `SELECTED` when a relevant file could not be had. The rest explains the curator's choices for the publication: the pairs not kept and why, the files downloaded or not.
@@ -21,9 +21,9 @@ Read the article's text and the note whole, whatever their size, then the descri
 
 The descriptions hold IDs: look up what they name, in a few grouped calls.
 
-- `uv run database-read search <accession>...`, once, with every accession of the descriptions: one line per entry, `SP` (Swiss-Prot) or `TR` (TrEMBL), its gene name, protein name, taxon and length.
-- `uv run database-read entry <accession>...`, only for a viral interactor with `start2` and `stop2`: the entry's chains, to see which mature protein the coordinates name.
-- `uv run database-read sql "select psimi_id, name from methods where psimi_id in ('MI:0007', 'MI:0018')"`, with every method of the descriptions: their names.
+- `uv run ./database/scripts/read.py search <accession>...`, once, with every accession of the descriptions: one line per entry, `SP` (Swiss-Prot) or `TR` (TrEMBL), its gene name, protein name, taxon and length.
+- `uv run ./database/scripts/read.py entry <accession>...`, only for a viral interactor with `start2` and `stop2`: the entry's chains, to see which mature protein the coordinates name.
+- `uv run ./database/scripts/read.py sql "select psimi_id, name from methods where psimi_id in ('MI:0007', 'MI:0018')"`, with every method of the descriptions: their names.
 
 No other command, no web search, no download.
 
@@ -75,4 +75,4 @@ Each description against the experiment it names. What is wrong:
 
 ## Reply
 
-Reply in one line, `<pmid>: nothing wrong`, or with one line per wrong thing, those left out first: `<pmid>: <the pair or the fragment left out, by its proteins as the article names them, or the description, by its accessions and method> — <what is wrong> — <why> — <where in the publication: figure, table, section>`. After that, each error of a `database-read` command, if any, with its command and output.
+Reply in one line, `<pmid>: nothing wrong`, or with one line per wrong thing, those left out first: `<pmid>: <the pair or the fragment left out, by its proteins as the article names them, or the description, by its accessions and method> — <what is wrong> — <why> — <where in the publication: figure, table, section>`. After that, each error of a `./database/scripts/read.py` command, if any, with its command and output.

@@ -160,7 +160,7 @@ def test_runs(conn, tmp_path):
     assert pmids(tmp_path / "a" / "descriptions_hh_run32-b-2.tsv") == {"15471871", "7499434"}
 
     for run in [31, 99]:  # an hh run, no run
-        with pytest.raises(SystemExit, match=f"--run {run}: not the ID of a vh run"):
+        with pytest.raises(ValueError, match=f"run {run}: not the ID of a vh run"):
             export(cur, generic, tmp_path / "c", run=run)
 
 
@@ -172,7 +172,7 @@ def test_not_in_step(conn, tmp_path):
     proteins = (generic / "proteins.tsv").read_text()
     proteins = proteins.replace("3052230\tNS5A\tNS5A", "3052230\tNS5A\t")
     (generic / "proteins.tsv").write_text(proteins)
-    with pytest.raises(SystemExit) as refused:
+    with pytest.raises(ValueError) as refused:
         export(conn.cursor(), generic, tmp_path / "out")
     lines = str(refused.value).splitlines()
     assert "taxon under no species\t11706" in lines  # HIV-1 HXB2R, Lentivirus gone

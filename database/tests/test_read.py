@@ -1,6 +1,8 @@
 """The read views: what a decision needs, from the test database."""
 
 import subprocess
+import sys
+from pathlib import Path
 
 from database.read import (
     Page,
@@ -17,8 +19,10 @@ from database.read import (
 )
 
 
-def _command(*args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(["uv", "run", "database-read", *args], capture_output=True, text=True)
+def _script(*args: str) -> subprocess.CompletedProcess[str]:
+    """The read script, run with this Python."""
+    script = Path(__file__).parents[1] / "scripts" / "read.py"
+    return subprocess.run([sys.executable, script, *args], capture_output=True, text=True)
 
 
 def test_methods(conn):
@@ -162,8 +166,8 @@ def test_closest(conn):
 
 def test_closest_searches_the_first_sequence(dbname):
     """More sequences: the first one's list, then a warning that the others are not searched."""
-    first = _command("closest", "MESLVLGVNE", "--taxon", "694009", "--limit", "1")
-    more = _command("closest", "MESLVLGVNE", "WWWWW", "X1", "--taxon", "694009", "--limit", "1")
+    first = _script("closest", "MESLVLGVNE", "--taxon", "694009", "--limit", "1")
+    more = _script("closest", "MESLVLGVNE", "WWWWW", "X1", "--taxon", "694009", "--limit", "1")
     assert more.stdout == (
         first.stdout + "warning: 2 more sequences not searched: closest searches the first only\n"
     )
@@ -214,30 +218,30 @@ def test_names(conn):
 
 
 def test_a_taxon_is_given_by_its_id(dbname):
-    result = _command("names", "SARS coronavirus CUHK-AG01")
+    result = _script("names", "SARS coronavirus CUHK-AG01")
     assert result.returncode == 2 and "invalid int value" in result.stderr
 
 
 def test_an_unknown_option_is_ignored(dbname):
-    result = _command("names", "239241", "--limit", "5")
+    result = _script("names", "239241", "--limit", "5")
     assert result.returncode == 0, result.stderr
     assert result.stderr == ""
-    assert result.stdout == _command("names", "239241").stdout
+    assert result.stdout == _script("names", "239241").stdout
 
 
 def test_sql_is_guarded(dbname):
     """Every row and every cell whole; past 10 kB of output, the rest left out with a line that
     says so; a write refused."""
-    result = _command("sql", "SELECT accession, sequences FROM proteins ORDER BY id LIMIT 2")
+    result = _script("sql", "SELECT accession, sequences FROM proteins ORDER BY id LIMIT 2")
     assert result.returncode == 0, result.stderr
     lines = result.stdout.splitlines()
     assert lines[0] == "#accession\tsequences" and len(lines) == 1 + 2
     assert max(len(line) for line in lines) > 300  # a sequence, not cut
-    lines = _command("sql", "SELECT generate_series(1, 1000) AS n").stdout.splitlines()
+    lines = _script("sql", "SELECT generate_series(1, 1000) AS n").stdout.splitlines()
     assert len(lines) == 1 + 1000 and lines[-1] == "1000"
     query = "SELECT repeat('x', 1000) AS x FROM generate_series(1, 20)"
-    lines = _command("sql", query).stdout.splitlines()
+    lines = _script("sql", query).stdout.splitlines()
     assert lines[-1] == "… cut at 10 kB: select fewer columns or rows"
     assert sum(len(line) + 1 for line in lines[:-1]) <= 10_000 and len(lines) - 2 == 9
-    result = _command("sql", "UPDATE methods SET name = 'x' WHERE psimi_id = 'MI:0018'")
+    result = _script("sql", "UPDATE methods SET name = 'x' WHERE psimi_id = 'MI:0018'")
     assert "read-only transaction" in result.stdout

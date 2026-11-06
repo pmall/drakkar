@@ -1,6 +1,6 @@
 # curation
 
-The curation of Drakkar by an AI agent. A client of the Drakkar database, it never imports its code: it reaches it only through the `database-*` commands its agents and skills run.
+The curation of Drakkar by an AI agent. A client of the Drakkar database, it never imports its code: it reaches it only through the scripts of `database/scripts/` its agents and skills run.
 
 - [`skills/curate/`](skills/curate/SKILL.md): the curation of one publication from its full text into its descriptions and its publication note. Its prompt is the whole curation.
 - [`agents/curator.md`](agents/curator.md): the curator agent, which runs the `curate` skill on one publication of a batch; its file holds only its settings.
@@ -10,5 +10,6 @@ The curation of Drakkar by an AI agent. A client of the Drakkar database, it nev
 - [`agents/reviewer.md`](agents/reviewer.md): the reviewer agent, which runs the `review` skill on one publication of a batch; its file holds only its settings.
 - [`skills/review-batch/`](skills/review-batch/SKILL.md): the optional review of a curated batch, each publication by a reviewer agent, what they find checked and reported; it writes nothing.
 - [`docs/`](docs/): [`curation-rules.md`](docs/curation-rules.md), the biological rules of the `curate` skill's prompt, explained; [`glossary.md`](docs/glossary.md), the curation's own terms.
-- [`src/curation/`](src/curation/): the `curation-*` commands, which fetch and convert full texts, read NCBI sequences and build a batch's publications file, and never touch the database; each is described in its module's docstring, which `uv run <command> --help` prints.
+- [`src/curation/`](src/curation/): the functions that fetch and convert full texts, read NCBI sequences and build a batch's publications file, and never touch the database.
+- [`scripts/`](scripts/): one script per tool, run by its path from the repository root, `uv run ./curation/scripts/<tool>.py`; each is described in its docstring, which `--help` prints.
 - [`tests/`](tests/): the tests, with their samples, no database.
