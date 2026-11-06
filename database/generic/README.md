@@ -17,6 +17,8 @@ The NCBI species, except where its species groups viruses that publications name
 - TGEV, PRCV, feline and canine coronavirus out of *Alphacoronavirus 1*; HCoV-OC43, bovine and equine coronavirus out of *Betacoronavirus 1*; MHV and rat coronavirus out of *Betacoronavirus muris*; IBV and turkey coronavirus out of *Gammacoronavirus galli*.
 - AAV1, AAV2, AAV4, AAV5, AAV6, AAV8, AAV9 and bovine AAV out of the *Dependoparvovirus* species.
 - Murine norovirus out of *Norwalk virus*, avian erythroblastosis virus out of avian leukosis virus, PlxyMNPV out of AcMNPV.
+- CVA8 out of *Enterovirus A*, AAV4 out of *Dependoparvovirus primate1*, as the viruses above them.
+- Two viruses are listed on taxa the NCBI taxonomy leaves unclassified, their own species nowhere: BANAL-20-236, the SARS-CoV-2-related bat coronavirus of its spike entry (*unclassified Orthocoronavirinae*, 2730119), and Cardioderma bat coronavirus KY43 (*unclassified Alphacoronavirus*, 983922), kept apart from Cardioderma bat coronavirus (3119326, *unclassified Coronaviridae*), whose spike is 82.9 % identical to it.
 
 Kept whole, where the NCBI species is the virus people name: influenza A (every subtype, every isolate), influenza B, HIV-1, HIV-2, HCV (every genotype), SIV (agm, cpz, mac, sm, stm), vaccinia (with rabbitpox and buffalopox), each adenovirus species (Ad2 and Ad5 together), rhinovirus A and C, FMDV (serotypes A and O), rotavirus A, Marburg (with Ravn), West Nile (with Kunjin), HEV (every genotype), and the herpesviruses with all their strains (EBV, HCMV, KSHV, HSV-1, HSV-2, VZV).
 

@@ -1,26 +1,27 @@
 family_ncbi_taxon_id	ncbi_taxon_id	name	publications
-10240	10245	Vaccinia virus	87
+10240	10245	Vaccinia virus	90
 10240	28321	Amsacta moorei entomopoxvirus	1
 10240	3426548	Canarypox virus	3
 10240	3426550	Fowlpox virus	4
+10240	3427718	Lumpy skin disease virus	4
 10240	3427719	Sheeppox virus	2
 10240	3427847	Mule deerpox virus	2
 10240	3428121	Nile crocodilepox virus	1
 10240	3430367	Myxoma virus	16
 10240	3430368	Shope fibroma virus	1
-10240	3430922	Molluscum contagiosum virus	12
+10240	3430922	Molluscum contagiosum virus	13
 10240	3431389	Orf virus	11
 10240	3431480	Camelpox virus	2
 10240	3431481	Cowpox virus	11
 10240	3431482	Ectromelia virus	10
-10240	3431483	Monkeypox virus	5
+10240	3431483	Monkeypox virus	8
 10240	3431486	Taterapox virus	1
 10240	3431487	Variola virus	6
 10240	3432644	Swinepox virus	2
-10240	3433538	Tanapox virus	4
+10240	3433538	Tanapox virus	5
 10240	3433539	Yaba monkey tumor virus	2
 10404	3426542	Duck hepatitis B virus	2
-10404	3431302	Hepatitis B virus	258
+10404	3431302	Hepatitis B virus	283
 10404	3431303	Woolly monkey hepatitis B virus	1
 10404	3431307	Woodchuck hepatitis virus	1
 10404	3431461	Roundleaf bat hepatitis B virus	1
@@ -48,120 +49,129 @@ family_ncbi_taxon_id	ncbi_taxon_id	name	publications
 10501	3428026	Emiliania huxleyi virus 86	1
 10501	3431618	Ectocarpus siliculosus virus 1	1
 10508	3241308	Frog adenovirus 1	1
-10508	3241402	Human adenovirus A	39
-10508	3241406	Human adenovirus B	23
+10508	3241402	Human adenovirus A	42
+10508	3241406	Human adenovirus B	26
 10508	3241409	Bovine adenovirus B	4
-10508	3241411	Human adenovirus C	202
-10508	3241420	Human adenovirus D	13
+10508	3241411	Human adenovirus C	208
+10508	3241420	Human adenovirus D	15
 10508	3241422	Murine adenovirus A	1
 10508	3241425	Human adenovirus E	4
-10508	3241426	Human adenovirus F	10
+10508	3241426	Human adenovirus F	11
 10508	3241445	Human adenovirus G	1
 10508	3426541	Fowl adenovirus A	1
-10780	10804	Adeno-associated virus 2	18
+10508	3432438	Psittacine adenovirus 2	1
+10780	10804	Adeno-associated virus 2	19
+10780	57579	Adeno-associated virus 4	1
 10780	68558	Adeno-associated virus 6	1
 10780	82300	Adeno-associated virus 5	4
 10780	85106	Adeno-associated virus 1	3
-10780	202813	Adeno-associated virus 8	2
+10780	202813	Adeno-associated virus 8	3
 10780	235455	Adeno-associated virus 9	3
 10780	256548	Bovine adeno-associated virus	1
-10780	272636	Adeno-associated virus	1
+10780	272636	Adeno-associated virus	2
 10780	3052026	Canine minute virus	1
-10780	3052040	Human bocavirus 1	6
+10780	3052040	Human bocavirus 1	10
+10780	3052041	Human bocavirus 2	1
 10780	3052049	Porcine bocavirus	1
-10780	3052189	Parvovirus B19	1
+10780	3052189	Parvovirus B19	2
 10780	3052707	Canine parvovirus	1
 10780	3052717	H-1 parvovirus	4
 10993	3048151	Infectious bursal disease virus	5
 11018	3426294	Barmah Forest virus	2
-11018	3426298	Chikungunya virus	25
-11018	3426299	Eastern equine encephalitis virus	3
-11018	3426303	Getah virus	1
+11018	3426298	Chikungunya virus	32
+11018	3426299	Eastern equine encephalitis virus	4
+11018	3426303	Getah virus	2
 11018	3426306	Mayaro virus	3
 11018	3426307	Middelburg virus	1
 11018	3426312	O'nyong-nyong virus	3
 11018	3426314	Ross River virus	2
-11018	3426317	Semliki Forest virus	11
-11018	3426318	Sindbis virus	7
-11018	3426322	Venezuelan equine encephalitis virus	11
-11018	3426323	Western equine encephalitis virus	1
-11050	11053	Dengue virus 1	15
-11050	11060	Dengue virus 2	103
-11050	11069	Dengue virus 3	9
+11018	3426317	Semliki Forest virus	16
+11018	3426318	Sindbis virus	8
+11018	3426322	Venezuelan equine encephalitis virus	13
+11018	3426323	Western equine encephalitis virus	4
+11050	11053	Dengue virus 1	16
+11050	11060	Dengue virus 2	113
+11050	11069	Dengue virus 3	11
 11050	11070	Dengue virus 4	11
 11050	2269360	Alongshan virus	1
-11050	3046277	Yellow fever virus	9
-11050	3048158	Japanese encephalitis virus	26
+11050	3046277	Yellow fever virus	10
+11050	3048158	Japanese encephalitis virus	33
 11050	3048170	Kyasanur Forest disease virus	2
-11050	3048175	Langat virus	6
-11050	3048360	Tembusu virus	1
-11050	3048443	Usutu virus	1
-11050	3048448	West Nile virus	35
-11050	3048459	Zika virus	62
-11050	3052465	Tick-borne encephalitis virus	11
+11050	3048175	Langat virus	9
+11050	3048184	Louping ill virus	1
+11050	3048287	Powassan virus	1
+11050	3048360	Tembusu virus	3
+11050	3048443	Usutu virus	3
+11050	3048448	West Nile virus	38
+11050	3048459	Zika virus	79
+11050	3052465	Tick-borne encephalitis virus	21
 11050	3052468	St. Louis encephalitis virus	2
-11118	11120	Infectious bronchitis virus	11
+11118	11120	Infectious bronchitis virus	13
 11118	11128	Bovine coronavirus	3
-11118	11138	Murine hepatitis virus	7
+11118	11138	Murine hepatitis virus	9
 11118	11146	Porcine respiratory coronavirus	1
-11118	11149	Transmissible gastroenteritis virus	4
+11118	11149	Transmissible gastroenteritis virus	5
 11118	11152	Turkey coronavirus	1
 11118	11153	Canine coronavirus	2
-11118	12663	Feline coronavirus	1
-11118	31631	Human coronavirus OC43	7
+11118	12663	Feline coronavirus	2
+11118	31631	Human coronavirus OC43	13
 11118	31632	Rat coronavirus	1
 11118	136187	Equine coronavirus	1
 11118	663565	Bat SARS-like coronavirus Rs806/2006	1
-11118	694009	Severe acute respiratory syndrome coronavirus	142
+11118	694009	Severe acute respiratory syndrome coronavirus	162
+11118	983922	Cardioderma bat coronavirus KY43	1
 11118	1737344	Bat SARS-like coronavirus BB9904	1
 11118	2032731	Swine acute diarrhea syndrome coronavirus	1
 11118	2045491	Swine enteric alphacoronavirus	1
-11118	2697049	Severe acute respiratory syndrome coronavirus 2	571
+11118	2697049	Severe acute respiratory syndrome coronavirus 2	708
 11118	2708335	Pangolin coronavirus	4
+11118	2730119	Bat coronavirus BANAL-20-236	1
+11118	3119326	Cardioderma bat coronavirus	1
 11118	3418615	Rousettus bat coronavirus HKU9	3
-11118	3433633	Middle East respiratory syndrome coronavirus	60
-11118	3433742	Porcine deltacoronavirus	3
-11118	3433756	Human coronavirus 229E	13
-11118	3433758	Human coronavirus HKU1	8
+11118	3433633	Middle East respiratory syndrome coronavirus	73
+11118	3433742	Porcine deltacoronavirus	5
+11118	3433756	Human coronavirus 229E	17
+11118	3433758	Human coronavirus HKU1	11
+11118	3433764	Bat Hp-betacoronavirus Zhejiang2013	1
 11118	3433775	Pipistrellus bat coronavirus HKU5	4
-11118	3433776	Tylonycteris bat coronavirus HKU4	5
-11118	3433789	Porcine epidemic diarrhea virus	7
+11118	3433776	Tylonycteris bat coronavirus HKU4	6
+11118	3433789	Porcine epidemic diarrhea virus	10
 11118	3433795	Rhinolophus bat coronavirus HKU2	1
-11118	3433809	Human coronavirus NL63	17
+11118	3433809	Human coronavirus NL63	21
 11158	3045953	J virus	1
 11158	3049952	Human parainfluenza virus 1	2
 11158	3049953	Human parainfluenza virus 3	7
-11158	3051375	Newcastle disease virus	8
-11158	3052221	Cedar virus	2
-11158	3052222	Ghana virus	1
-11158	3052223	Hendra virus	19
-11158	3052225	Nipah virus	47
+11158	3051375	Newcastle disease virus	11
+11158	3052221	Cedar virus	5
+11158	3052222	Ghana virus	2
+11158	3052223	Hendra virus	22
+11158	3052225	Nipah virus	52
 11158	3052263	Beilong virus	1
 11158	3052342	Canine distemper virus	1
-11158	3052343	Peste des petits ruminants virus	2
-11158	3052345	Measles virus	42
+11158	3052343	Peste des petits ruminants virus	4
+11158	3052345	Measles virus	44
 11158	3052346	Rinderpest virus	2
 11158	3052347	Phocine distemper virus	1
 11158	3052556	Human parainfluenza virus 4	1
-11158	3052557	Human parainfluenza virus 2	10
-11158	3052558	Parainfluenza virus 5	19
-11158	3052559	Mapuera virus	3
-11158	3052560	Mumps virus	18
+11158	3052557	Human parainfluenza virus 2	12
+11158	3052558	Parainfluenza virus 5	20
+11158	3052559	Mapuera virus	4
+11158	3052560	Mumps virus	19
 11158	3052561	Simian virus 41	1
 11158	3052562	Porcine rubulavirus	3
-11158	3052599	Menangle virus	3
-11158	3052602	Tioman virus	3
+11158	3052599	Menangle virus	4
+11158	3052602	Tioman virus	4
 11158	3052729	Bovine parainfluenza virus 3	4
-11158	3052731	Sendai virus	19
+11158	3052731	Sendai virus	21
 11158	3052740	Salem virus	2
 11244	28869	Ovine respiratory syncytial virus	1
 11244	3047384	Avian metapneumovirus	2
 11244	3048148	Human metapneumovirus	5
-11244	3049954	Human respiratory syncytial virus	33
-11244	3050248	Bovine respiratory syncytial virus	1
+11244	3049954	Human respiratory syncytial virus	37
+11244	3050248	Bovine respiratory syncytial virus	2
 11244	3050329	Pneumonia virus of mice	1
 11266	3052148	Lloviu virus	1
-11266	3052181	Mengla virus	2
+11266	3052181	Mengla virus	3
 11266	3052457	Bombali virus	1
 11266	3052458	Bundibugyo virus	3
 11266	3052459	Reston virus	8
@@ -170,31 +180,33 @@ family_ncbi_taxon_id	ncbi_taxon_id	name	publications
 11266	3052462	Ebola virus	76
 11266	3052505	Marburg virus	19
 11270	11276	Vesicular stomatitis virus	3
-11270	11292	Rabies virus	24
-11270	12538	Mokola virus	2
-11270	38766	Lagos bat virus	1
-11270	90961	Australian bat lyssavirus	2
+11270	11292	Rabies virus	30
+11270	12538	Mokola virus	3
+11270	38766	Lagos bat virus	2
+11270	38767	Duvenhage virus	1
+11270	90961	Australian bat lyssavirus	3
 11270	211977	Aravan virus	1
 11270	249583	Irkut virus	1
-11270	249584	West Caucasian bat virus	1
+11270	249584	West Caucasian bat virus	2
 11270	1972573	Isfahan virus	1
 11270	1972576	Chandipura virus	1
-11270	1972577	Vesicular stomatitis Indiana virus	9
+11270	1972577	Vesicular stomatitis Indiana virus	10
 11270	1972578	Vesicular stomatitis New Jersey virus	3
 11270	1972584	Tibrogargan virus	1
-11270	2951618	European bat lyssavirus 1	2
+11270	2951618	European bat lyssavirus 1	4
 11270	3426144	Lettuce necrotic yellows virus	1
 11308	11318	Dhori virus	1
 11308	11569	Thogoto virus	4
-11308	2955291	Influenza A virus	355
-11308	2955465	Influenza B virus	25
+11308	2955291	Influenza A virus	402
+11308	2955465	Influenza B virus	27
 11308	2955744	Influenza D virus	2
 11308	2955935	Influenza C virus	6
+11308	2956523	Bourbon virus	1
 11617	2169991	Junin virus	8
 11617	3052299	Sabia virus	2
 11617	3052300	Pichinde virus	1
 11617	3052302	Chapare virus	1
-11617	3052303	Lymphocytic choriomeningitis virus	10
+11617	3052303	Lymphocytic choriomeningitis virus	11
 11617	3052307	Guanarito virus	2
 11617	3052308	Ippy virus	1
 11617	3052310	Lassa virus	15
@@ -204,7 +216,7 @@ family_ncbi_taxon_id	ncbi_taxon_id	name	publications
 11617	3052320	Mopeia virus	3
 11617	3052322	Oliveros virus	1
 11617	3052331	Whitewater Arroyo virus	1
-11632	11642	Simian foamy virus	9
+11632	11642	Simian foamy virus	10
 11632	11788	Abelson murine leukemia virus	1
 11632	11861	Avian erythroblastosis virus	1
 11632	57667	Simian-Human immunodeficiency virus	2
@@ -212,21 +224,21 @@ family_ncbi_taxon_id	ncbi_taxon_id	name	publications
 11632	3418645	Bovine immunodeficiency virus	7
 11632	3418646	Jembrana disease virus	2
 11632	3418647	Caprine arthritis encephalitis virus	2
-11632	3418648	Equine infectious anemia virus	14
+11632	3418648	Equine infectious anemia virus	15
 11632	3418649	Feline immunodeficiency virus	7
-11632	3418650	Human immunodeficiency virus 1	1101
-11632	3418651	Human immunodeficiency virus 2	47
+11632	3418650	Human immunodeficiency virus 1	1141
+11632	3418651	Human immunodeficiency virus 2	53
 11632	3418652	Visna-maedi virus	6
-11632	3418654	Simian immunodeficiency virus	58
+11632	3418654	Simian immunodeficiency virus	63
 11632	3426267	Avian leukosis virus	2
-11632	3426270	Rous sarcoma virus	6
+11632	3426270	Rous sarcoma virus	7
 11632	3426272	UR2 sarcoma virus	1
 11632	3426273	Y73 sarcoma virus	1
 11632	3427294	Mason-Pfizer monkey virus	4
 11632	3427296	Jaagsiekte sheep retrovirus	3
 11632	3427599	Bovine foamy virus	3
 11632	3428211	Bovine leukemia virus	2
-11632	3428212	Human T-lymphotropic virus 1	191
+11632	3428212	Human T-lymphotropic virus 1	198
 11632	3428213	Human T-lymphotropic virus 2	9
 11632	3428214	Human T-lymphotropic virus 3	3
 11632	3428561	Walleye dermal sarcoma virus	4
@@ -234,7 +246,7 @@ family_ncbi_taxon_id	ncbi_taxon_id	name	publications
 11632	3428953	Gibbon ape leukemia virus	1
 11632	3428957	Koala retrovirus	1
 11632	3428958	Moloney murine sarcoma virus	3
-11632	3428959	Murine leukemia virus	18
+11632	3428959	Murine leukemia virus	19
 11974	223997	Murine norovirus	3
 11974	1176484	Canine vesivirus	1
 11974	3431062	Newbury 1 virus	1
@@ -242,35 +254,37 @@ family_ncbi_taxon_id	ncbi_taxon_id	name	publications
 11974	3433198	Vesicular exanthema of swine virus	1
 11974	3433199	Feline calicivirus	2
 12058	12071	Coxsackievirus B1	1
-12058	12072	Coxsackievirus B3	22
+12058	12072	Coxsackievirus B3	23
 12058	12073	Coxsackievirus B4	1
-12058	12074	Coxsackievirus B5	1
+12058	12074	Coxsackievirus B5	2
 12058	12080	Poliovirus 1	18
 12058	12083	Poliovirus 2	2
 12058	12086	Poliovirus 3	1
 12058	12089	Coxsackievirus A24	1
-12058	31704	Coxsackievirus A16	5
-12058	39054	Enterovirus A71	61
-12058	42769	Coxsackievirus A10	2
+12058	31704	Coxsackievirus A16	6
+12058	39054	Enterovirus A71	66
+12058	42769	Coxsackievirus A10	3
 12058	42775	Coxsackievirus A17	1
+12058	42788	Coxsackievirus A8	1
 12058	72149	Aichi virus	8
 12058	82639	Coxsackievirus B2	1
 12058	86107	Coxsackievirus A6	1
 12058	194965	Bovine kobuvirus	2
 12058	1298633	Porcine kobuvirus	2
-12058	3241303	Seneca Valley virus	5
-12058	3407641	Hepatitis A virus	4
-12058	3426401	Foot-and-mouth disease virus	19
-12058	3427730	Encephalomyocarditis virus	15
+12058	3241303	Seneca Valley virus	8
+12058	3407641	Hepatitis A virus	7
+12058	3426401	Foot-and-mouth disease virus	20
+12058	3427728	Rat theilovirus	1
+12058	3427730	Encephalomyocarditis virus	17
 12058	3427731	Saffold virus	1
 12058	3427732	Theiler's murine encephalomyelitis virus	3
-12058	3428501	Rhinovirus A	8
+12058	3428501	Rhinovirus A	9
 12058	3428503	Rhinovirus B	2
 12058	3428504	Rhinovirus C	2
-12058	3428506	Enterovirus D	10
+12058	3428506	Enterovirus D	12
 12058	3428507	Enterovirus E	1
 12058	3428508	Enterovirus F	1
-12058	3431395	Human parechovirus	3
+12058	3431395	Human parechovirus	4
 12058	3432241	Salivirus A	2
 39724	3047835	Finch circovirus	1
 39729	3240642	Potato virus Y	1
@@ -283,17 +297,17 @@ family_ncbi_taxon_id	ncbi_taxon_id	name	publications
 43682	3444724	Heliothis virescens ascovirus 3a	1
 76803	2499620	Equine arteritis virus	2
 76803	2499622	Simian hemorrhagic fever virus	1
-76803	2499685	Porcine reproductive and respiratory syndrome virus 2	18
+76803	2499685	Porcine reproductive and respiratory syndrome virus 2	21
 76803	3411021	Porcine reproductive and respiratory syndrome virus 1	3
-137992	3426474	African swine fever virus	22
+137992	3426474	African swine fever virus	24
 151340	10561	Bovine papillomavirus 4	1
 151340	10568	Micromys minutus papillomavirus 1	1
 151340	10570	Rhesus papillomavirus 1	1
 151340	10571	Bovine papillomavirus	9
-151340	10579	Human papillomavirus 8	22
+151340	10579	Human papillomavirus 8	23
 151340	10580	Human papillomavirus 11	59
 151340	10583	Human papillomavirus 1a	13
-151340	10584	Human papillomavirus 2a	1
+151340	10584	Human papillomavirus 2a	2
 151340	10585	Human papillomavirus 31	32
 151340	10586	Human papillomavirus 33	17
 151340	10587	Human papillomavirus 35	4
@@ -302,7 +316,7 @@ family_ncbi_taxon_id	ncbi_taxon_id	name	publications
 151340	10592	Human papillomavirus 44	1
 151340	10593	Human papillomavirus 45	7
 151340	10595	Human papillomavirus 51	6
-151340	10596	Human papillomavirus 56	1
+151340	10596	Human papillomavirus 56	2
 151340	10598	Human papillomavirus 58	8
 151340	10599	Human papillomavirus 5b	3
 151340	10600	Human papillomavirus 6b	28
@@ -339,18 +353,18 @@ family_ncbi_taxon_id	ncbi_taxon_id	name	publications
 151340	69985	Human papillomavirus 76	3
 151340	69986	Human papillomavirus 77	1
 151340	82676	Phocoena spinipinnis papillomavirus	1
-151340	129724	Human papillomavirus 82	1
+151340	129724	Human papillomavirus 82	2
 151340	211787	Human papillomavirus 92	4
 151340	247268	Human papillomavirus 93	1
 151340	247269	Human papillomavirus 96	1
 151340	333751	Human papillomavirus 2	2
 151340	333753	Human papillomavirus 57	2
 151340	333759	Human papillomavirus 10	4
-151340	333760	Human papillomavirus 16	317
-151340	333761	Human papillomavirus 18	130
+151340	333760	Human papillomavirus 16	330
+151340	333761	Human papillomavirus 18	134
 151340	333762	Human papillomavirus 26	2
 151340	333763	Human papillomavirus 32	3
-151340	333923	Human papillomavirus 5	21
+151340	333923	Human papillomavirus 5	22
 151340	337052	Bovine papillomavirus 1	40
 151340	587347	Human papillomavirus 98	3
 151340	763552	Mus musculus papillomavirus 1	3
@@ -361,17 +375,23 @@ family_ncbi_taxon_id	ncbi_taxon_id	name	publications
 151340	1671798	Human papillomavirus 54	1
 151341	12480	African green monkey polyomavirus	1
 151341	46771	Simian virus 12	1
-151341	1891726	Merkel cell polyomavirus	20
+151341	1208309	MW polyomavirus	1
+151341	1891726	Merkel cell polyomavirus	24
 151341	1891727	Trichodysplasia spinulosa polyomavirus	3
 151341	1891729	Hamster polyomavirus	2
 151341	1891730	Murine polyomavirus	11
+151341	1891745	STL polyomavirus	1
 151341	1891762	BK polyomavirus	8
-151341	1891763	JC polyomavirus	25
-151341	1891767	Simian virus 40	99
+151341	1891763	JC polyomavirus	26
+151341	1891764	KI polyomavirus	1
+151341	1891765	WU polyomavirus	1
+151341	1891767	Simian virus 40	100
+151341	2955745	Human polyomavirus 7	1
 151341	2955746	Human polyomavirus 6	1
 178830	1714619	Mammalian orthobornavirus 1	9
 196937	342409	White spot syndrome virus	1
 548682	3050301	Channel catfish virus	1
+548685	3050290	Abalone herpesvirus	1
 585893	2956252	Human picobirnavirus	1
 675071	3432887	Turnip vein-clearing virus	1
 675071	3432896	Wasabi mottle virus	1
@@ -379,24 +399,26 @@ family_ncbi_taxon_id	ncbi_taxon_id	name	publications
 687329	68887	Torque teno virus	1
 687329	2844800	Avian gyrovirus 2	1
 687329	3047743	Chicken anemia virus	6
+687329	3048379	Torque teno douroucouli virus	1
 1980413	1980456	Andes virus	6
-1980413	3052480	Hantaan virus	7
+1980413	3052480	Hantaan virus	10
+1980413	3052492	Prospect Hill virus	1
 1980413	3052493	Puumala virus	1
 1980413	3052498	Seoul virus	1
 1980413	3052499	Sin Nombre virus	3
 1980413	3052503	Tula virus	1
 1980415	3052514	Dugbe virus	1
 1980415	3052515	Erve virus	1
-1980415	3052518	Crimean-Congo hemorrhagic fever virus	7
-1980415	3052519	Hazara virus	3
+1980415	3052518	Crimean-Congo hemorrhagic fever virus	13
+1980415	3052519	Hazara virus	4
 1980416	3052381	Bunyamwera virus	1
 1980416	3052407	Snowshoe hare virus	1
 1980416	3052409	La Crosse virus	4
 1980416	3052437	Schmallenberg virus	1
-1980418	2748958	Severe fever with thrombocytopenia syndrome virus	19
+1980418	2748958	Severe fever with thrombocytopenia syndrome virus	28
 1980418	3051991	Guertu virus	2
 1980418	3051992	Heartland virus	5
-1980418	3052676	Rift Valley fever virus	7
+1980418	3052676	Rift Valley fever virus	9
 1980418	3052681	Sandfly fever Sicilian virus	3
 1980418	3052686	Toscana virus	4
 1980418	3052811	Uukuniemi virus	2
@@ -407,10 +429,10 @@ family_ncbi_taxon_id	ncbi_taxon_id	name	publications
 2946186	348136	Human rotavirus B219	1
 2946186	3240447	Banna virus	1
 2946186	3431240	Bluetongue virus	7
-2946186	3432193	Rotavirus A	24
+2946186	3432193	Rotavirus A	29
 2946186	3432203	Rotavirus C	1
 2946187	185782	Grass carp reovirus	1
-2946187	3422298	Mammalian orthoreovirus	5
+2946187	3422298	Mammalian orthoreovirus	7
 2946187	3428066	Colorado tick fever virus	1
 2946187	3431499	Reptilian orthoreovirus	2
 2946190	3429156	Haloferax virus HF1	1
@@ -427,33 +449,33 @@ family_ncbi_taxon_id	ncbi_taxon_id	name	publications
 3044472	3050281	Equine herpesvirus 2	5
 3044472	3050284	Feline herpesvirus 1	1
 3044472	3050287	Marek's disease virus	2
-3044472	3050292	Herpes simplex virus 1	195
-3044472	3050293	Herpes simplex virus 2	21
-3044472	3050294	Varicella-zoster virus	26
-3044472	3050295	Human cytomegalovirus	215
-3044472	3050296	Human herpesvirus 6A	15
-3044472	3050297	Human herpesvirus 6B	11
-3044472	3050298	Human herpesvirus 7	5
-3044472	3050299	Epstein-Barr virus	265
-3044472	3050300	Kaposi's sarcoma-associated herpesvirus	236
+3044472	3050292	Herpes simplex virus 1	204
+3044472	3050293	Herpes simplex virus 2	23
+3044472	3050294	Varicella-zoster virus	32
+3044472	3050295	Human cytomegalovirus	238
+3044472	3050296	Human herpesvirus 6A	18
+3044472	3050297	Human herpesvirus 6B	16
+3044472	3050298	Human herpesvirus 7	6
+3044472	3050299	Epstein-Barr virus	280
+3044472	3050300	Kaposi's sarcoma-associated herpesvirus	252
 3044472	3050305	Herpes B virus	1
 3044472	3050308	Rhesus cytomegalovirus	1
 3044472	3050314	Rhesus lymphocryptovirus	1
 3044472	3050315	Rhesus rhadinovirus	4
-3044472	3050323	Murine cytomegalovirus	16
+3044472	3050323	Murine cytomegalovirus	19
 3044472	3050324	Rat cytomegalovirus	1
-3044472	3050327	Murine gammaherpesvirus 68	22
+3044472	3050327	Murine gammaherpesvirus 68	24
 3044472	3050350	Herpesvirus saimiri	17
-3044472	3050355	Pseudorabies virus	8
-3079366	1678143	Hepatitis E virus	23
+3044472	3050355	Pseudorabies virus	11
+3079366	1678143	Hepatitis E virus	27
 3079366	1678144	Avian hepatitis E virus	2
 3079366	1678145	Rat hepatitis E virus	1
 3700673	3702452	Diaporthe ambigua RNA virus 1	1
-3700683	3052230	Hepatitis C virus	437
+3700683	3052230	Hepatitis C virus	444
 3700683	3052236	GB virus B	1
-3700694	3052619	Bovine viral diarrhea virus 1	3
+3700694	3052619	Bovine viral diarrhea virus 1	4
 3700694	3052624	Atypical porcine pestivirus	1
-3700694	3052625	Classical swine fever virus	6
+3700694	3052625	Classical swine fever virus	7
 3700694	3052626	Bovine viral diarrhea virus 2	1
 3700705	10703	Corynephage beta	1
 	10684	Bacillus phage PBS2	1
