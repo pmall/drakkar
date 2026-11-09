@@ -34,7 +34,9 @@ Revisions (`*.revise.jsonl`, `*.delete.jsonl`), one line per revised or removed 
 unless it gives what a merged duplicate was decided to become), `note`.
 
 Publications (`*.jsonl`), one line per publication whose state or note changes, a
-`PublicationUpdate`: `pmid` (a number), `state` (`selected` or `curated`), `note`.
+`PublicationUpdate`: `pmid` (a number), `state` (`selected`, `curated` or `discarded`), `note`.
+A `pending` publication becomes `selected` or `discarded` (a pre-curation), a `selected` or
+`curated` one `selected` or `curated` (a curation pass).
 
     {"pmid": 35939498, "state": "curated", "note": "CURATED ..."}
 """
@@ -205,8 +207,8 @@ def revision(where: str, row: dict[str, Any]) -> Revision:
 def publication(where: str, row: dict[str, Any]) -> PublicationUpdate:
     """A publication update, from its JSON object."""
     state = _text(where, row, "state").strip()
-    if state not in ("selected", "curated"):
-        raise FileError(f"{where}: state is {state!r}, not selected or curated")
+    if state not in ("selected", "curated", "discarded"):
+        raise FileError(f"{where}: state is {state!r}, not selected, curated or discarded")
     return PublicationUpdate(_number(where, row, "pmid"), state, _text(where, row, "note"))
 
 

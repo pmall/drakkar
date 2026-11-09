@@ -292,6 +292,43 @@ def test_publication_note_goes_first(conn):
     assert note_of(conn, SELECTED) == f"[{today(conn)}] {note}\n---\n{dated}"
 
 
+PENDING = 990000001
+
+
+def _pending(conn) -> None:
+    """A new vh run with one `pending` publication, `PENDING`."""
+    run_id = conn.execute(
+        "INSERT INTO runs (type, name) VALUES ('vh', '99') RETURNING id"
+    ).fetchone()[0]
+    conn.execute("INSERT INTO publications (pmid) VALUES (%s)", (PENDING,))
+    conn.execute("INSERT INTO associations (run_id, pmid) VALUES (%s, %s)", (run_id, PENDING))
+    conn.commit()
+
+
+@pytest.mark.parametrize("state", ["selected", "discarded"])
+def test_precuration_moves_a_pending_publication_undated(conn, state):
+    _pending(conn)
+    update = PublicationUpdate(PENDING, state, f"{state.upper()} co-IP of NS1 with TRIM25")
+    assert update_publications(conn, [update], author="haiku", commit=True).committed
+    row = conn.execute(
+        "SELECT state, ai_pass_at, annotation FROM associations WHERE pmid = %s", (PENDING,)
+    ).fetchone()
+    assert row == (state, None, f"[{today(conn)}, haiku] {state.upper()} co-IP of NS1 with TRIM25")
+
+
+def test_a_pending_publication_cannot_be_curated(conn):
+    _pending(conn)
+    outcome = update_publications(conn, [PublicationUpdate(PENDING, "curated", "CURATED")])
+    assert not outcome.ok
+    assert "is pending: it can become selected or discarded, not curated" in str(outcome.problems)
+
+
+def test_a_selected_publication_cannot_be_discarded(conn):
+    outcome = update_publications(conn, [PublicationUpdate(SELECTED, "discarded", "DISCARDED")])
+    assert not outcome.ok
+    assert "is selected: it can become selected or curated, not discarded" in str(outcome.problems)
+
+
 def test_publication_note_is_taken_as_written(conn):
     """The state is the update's; the note, whatever its first line, is stored after the date."""
     update = PublicationUpdate(SELECTED, "curated", "co-IP of NS1 with TRIM25")

@@ -1,0 +1,79 @@
+(virus*[tiab] OR viral[tiab] OR AAV[tiab] OR AAV1*[tiab] OR AAV2*[tiab] OR AAV3*[tiab] OR AAV4*[tiab]
+OR AAV5*[tiab] OR AAV6*[tiab] OR AAV8*[tiab] OR AAV9*[tiab] OR BPV[tiab] OR BPV1*[tiab] OR
+BPV2*[tiab] OR BPV3*[tiab] OR BPV4*[tiab] OR BPV5*[tiab] OR BPV7*[tiab] OR BPV8*[tiab] OR
+BPV9*[tiab] OR CHIKV*[tiab] OR DENV*[tiab] OR EBOV[tiab] OR EBV[tiab] OR HBV[tiab] OR HCV[tiab] OR
+HHV[tiab] OR HHV1*[tiab] OR HHV2*[tiab] OR HHV5*[tiab] OR HHV6*[tiab] OR HHV7*[tiab] OR HHV8*[tiab]
+OR HIV[tiab] OR HIV1[tiab] OR HIV2[tiab] OR HPV[tiab] OR HPV1*[tiab] OR HPV2*[tiab] OR HPV3*[tiab]
+OR HPV4*[tiab] OR HPV5*[tiab] OR HPV6*[tiab] OR HPV7*[tiab] OR HPV8*[tiab] OR HPV9*[tiab] OR
+HSV[tiab] OR HSV1*[tiab] OR HSV2*[tiab] OR HSV8*[tiab] OR HSV9*[tiab] OR HTLV*[tiab] OR SARS*[tiab]
+OR COVID*[tiab] OR 2019-nCoV[tiab] OR TBEV[tiab] OR VACV[tiab] OR VZV[tiab] OR WNV[tiab] OR
+YFV[tiab] OR adenovirus*[tiab] OR alphacoronavirus*[tiab] OR alphaherpesvirus*[tiab] OR
+alphapapillomavirus*[tiab] OR alpharetrovirus*[tiab] OR alphatorquevirus*[tiab] OR alphavirus*[tiab]
+OR anellovirus*[tiab] OR arbovirus*[tiab] OR arenavirus*[tiab] OR atadenovirus*[tiab] OR
+betacoronavirus*[tiab] OR betaherpesvirus*[tiab] OR betapapillomavirus*[tiab] OR
+betaretrovirus*[tiab] OR bocavirus*[tiab] OR bornavirus*[tiab] OR bunyavirus*[tiab] OR
+calicivirus*[tiab] OR cardiovirus*[tiab] OR coltivirus*[tiab] OR coronavirus*[tiab] OR
+coxsackievirus*[tiab] OR cytomegalovirus*[tiab] OR deltacoronavirus*[tiab] OR
+deltapapillomavirus*[tiab] OR ebolavirus*[tiab] OR echovirus*[tiab] OR enterovirus*[tiab] OR
+epsilonpapillomavirus*[tiab] OR errantivirus*[tiab] OR erythrovirus*[tiab] OR filovirus*[tiab] OR
+flavivirus*[tiab] OR gammacoronavirus*[tiab] OR gammaherpesvirus*[tiab] OR
+gammapapillomavirus*[tiab] OR gammaretrovirus*[tiab] OR hantavirus*[tiab] OR henipavirus*[tiab] OR
+hepacivirus*[tiab] OR hepatovirus*[tiab] OR herpesvirus*[tiab] OR influenzavirus*[tiab] OR
+kobuvirus*[tiab] OR lambdapapillomavirus*[tiab] OR lentivirus*[tiab] OR levivirus*[tiab] OR
+lymphocryptovirus*[tiab] OR lyssavirus*[tiab] OR marburgvirus*[tiab] OR mastadenovirus*[tiab] OR
+mengovirus*[tiab] OR metapneumovirus*[tiab] OR metavirus*[tiab] OR morbillivirus*[tiab] OR
+mupapillomavirus*[tiab] OR nodavirus*[tiab] OR norovirus*[tiab] OR oncovirus*[tiab] OR
+orbivirus*[tiab] OR orthobunyavirus*[tiab] OR orthopoxvirus*[tiab] OR orthoreovirus*[tiab] OR
+papillomavirus*[tiab] OR papovavirus*[tiab] OR paramyxovirus*[tiab] OR parapoxvirus*[tiab] OR
+parechovirus*[tiab] OR parvovirus*[tiab] OR pasivirus*[tiab] OR pestivirus*[tiab] OR
+phlebovirus*[tiab] OR picobirnavirus*[tiab] OR picornavirus*[tiab] OR pipapillomavirus*[tiab] OR
+pneumovirus*[tiab] OR poliovirus*[tiab] OR polyomavirus*[tiab] OR poxvirus*[tiab] OR
+recovirus*[tiab] OR reovirus*[tiab] OR respirovirus*[tiab] OR retrovirus*[tiab] OR
+rhadinovirus*[tiab] OR rhinovirus*[tiab] OR roseolovirus*[tiab] OR rotavirus*[tiab] OR
+rubulavirus*[tiab] OR sapovirus*[tiab] OR senecavirus*[tiab] OR siadenovirus*[tiab] OR
+spumaretrovirus*[tiab] OR torovirus*[tiab] OR varicellovirus*[tiab] OR xipapillomavirus*[tiab])
+AND (interact*[tiab] OR bind*[tiab] OR bound[tiab])
+AND English[lang]
+NOT (review[pt] OR systematic review[pt] OR meta-analysis[pt] OR editorial[pt] OR news[pt]
+OR published erratum[pt] OR retraction notice[pt] OR preprint[pt] OR retracted publication[pt])
+NOT ("case-control"[ti] OR "genetic association*"[ti] OR "home-based"[ti] OR "honey bee"[ti] OR
+"lentiviral vector"[ti] OR "low-cost"[ti] OR "monoclonal antibody"[ti] OR "new zealand"[ti] OR
+"polyclonal antibody"[ti] OR "quality of life"[ti] OR "risk factor"[ti] OR "South Africa"[ti] OR
+"South African"[ti] OR adamantane*[ti] OR adjuvant[ti] OR aerosol[ti] OR alcohol[ti] OR allele*[ti]
+OR amantadine[ti] OR aquatic[ti] OR bacteriophage*[ti] OR BALB/c[ti] OR biopsy[ti] OR bombyx[ti] OR
+canine[ti] OR child[ti] OR childhood[ti] OR children[ti] OR circumcision[ti] OR clinical*[ti] OR
+clinician*[ti] OR cohort*[ti] OR commercial[ti] OR copolymer[ti] OR crop[ti] OR demographic[ti] OR
+demography[ti] OR depression[ti] OR dog[ti] OR dogs[ti] OR ecology[ti] OR economic[ti] OR
+editorial[ti] OR egypt[ti] OR epidemiology[ti] OR epitope*[ti] OR escherichia[ti] OR europe[ti] OR
+farm[ti] OR farms[ti] OR feline[ti] OR ferret*[ti] OR geographical[ti] OR helicobacter[ti] OR
+herb[ti] OR histoculture[ti] OR honeybee[ti] OR hormonal[ti] OR hospital*[ti] OR hydrogel[ti] OR
+india[ti] OR industry[ti] OR international[ti] OR iraqi[ti] OR larvicide[ti] OR leaf[ti] OR
+leishmania[ti] OR markov[ti] OR masculinity[ti] OR mathematical[ti] OR medication[ti] OR
+medicine[ti] OR mental[ti] OR microdissection[ti] OR microneutralization[ti] OR military[ti] OR
+molluscan[ti] OR monobodies[ti] OR mosaic[ti] OR multiplex[ti] OR nanoparticle*[ti] OR nanotube*[ti]
+OR neuropsychological[ti] OR neutralisation[ti] OR neutralizing[ti] OR newborn*[ti] OR obesity[ti]
+OR oral[ti] OR oseltamivir[ti] OR osmolyte*[ti] OR paediatric[ti] OR pakistan[ti] OR papaya[ti] OR
+patient*[ti] OR pediatric[ti] OR phage[ti] OR phages[ti] OR pharmacokinetic*[ti] OR physician*[ti]
+OR phytohormone[ti] OR pig[ti] OR pigs[ti] OR plant[ti] OR planta[ti] OR plants[ti] OR polymer[ti]
+OR polymorphism[ti] OR population[ti] OR prenatal[ti] OR prevalence[ti] OR prophyla*[ti] OR
+pseudomonas[ti] OR psychiatric[ti] OR psychology[ti] OR quasispecies[ti] OR rat[ti] OR review[ti] OR
+reviews[ti] OR ribavirin[ti] OR rice[ti] OR rimantadine[ti] OR rodent*[ti] OR social[ti] OR
+sport[ti] OR stimulation[ti] OR symposium[ti] OR tamiflu[ti] OR temperature[ti] OR theoretical[ti]
+OR therapies[ti] OR therapy[ti] OR thermodynamics[ti] OR transplant[ti] OR tuberculosis[ti] OR
+vaccination[ti] OR vaccine[ti] OR virtual[ti] OR volunteers[ti] OR wellbeing[ti] OR wheat[ti] OR
+women[ti] OR zebrafish[ti] OR "deep-water"[tiab] OR "drug users"[tiab] OR "mental illness"[tiab] OR
+"observational study"[tiab] OR "prospective memory"[tiab] OR "qualitative study"[tiab] OR
+"randomized trial"[tiab] OR "stochastic model"[tiab] OR "the present review"[tiab] OR "this
+chapter"[tiab] OR "this review"[tiab] OR "water-sediment"[tiab] OR "we review"[tiab] OR
+actinobacteria[tiab] OR adolescence[tiab] OR adolescent*[tiab] OR algal[tiab] OR alzheimer[tiab] OR
+amastigotes[tiab] OR anesthetics[tiab] OR anorexia[tiab] OR arabidopsis[tiab] OR benthamiana[tiab]
+OR carp[tiab] OR citrus[tiab] OR climate[tiab] OR condom*[tiab] OR cotton[tiab] OR crab[tiab] OR
+crack[tiab] OR crayfish[tiab] OR cryptococcus[tiab] OR cucumber[tiab] OR emotional[tiab] OR
+facebook[tiab] OR fungi[tiab] OR geological[tiab] OR habitat*[tiab] OR haustoria[tiab] OR
+haustorium[tiab] OR hyena[tiab] OR leaves[tiab] OR lettuce[tiab] OR lotus[tiab] OR maize[tiab] OR
+metaanalysis[tiab] OR meteorus[tiab] OR minireview[tiab] OR nicotiana[tiab] OR orchid[tiab] OR
+oyster[tiab] OR parakeet[tiab] OR parenteral[tiab] OR phloem[tiab] OR plankton[tiab] OR potato[tiab]
+OR prawn[tiab] OR pregnan*[tiab] OR racism[tiab] OR radiopharmaceutical[tiab] OR salmon[tiab] OR
+sanitizer*[tiab] OR schizophreni*[tiab] OR serosurvey[tiab] OR shrimp*[tiab] OR smoking[tiab] OR
+songbird[tiab] OR soybean[tiab] OR spodoptera[tiab] OR telephone[tiab] OR thaliana[tiab] OR
+tobacco[tiab] OR tomato[tiab] OR turbot[tiab] OR twitter[tiab] OR veteran[tiab])

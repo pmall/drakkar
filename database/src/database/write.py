@@ -96,10 +96,12 @@ class Revision:
 
 @dataclass(frozen=True)
 class PublicationUpdate:
-    """The state of a publication in its vh run (`selected` or `curated`) and the note of a pass."""
+    """The state of a publication in its vh run and the note of a pass: from `pending`, a
+    pre-curation, `selected` or `discarded`; from `selected` or `curated`, a curation pass,
+    `selected` or `curated`."""
 
     pmid: int
-    state: Literal["selected", "curated"]
+    state: Literal["selected", "curated", "discarded"]
     note: str
 
 
@@ -583,9 +585,22 @@ NEW_NOTE = "concat_ws(E'\\n---\\n', nullif(%s::text, ''), nullif(annotation, '')
 
 
 def _publication(cur: Any, update: PublicationUpdate, author: str = "") -> str:
-    association = _writable(vh_association(cur, update.pmid))
+    """A pre-curation moves a `pending` publication to `selected` or `discarded`, its
+    `ai_pass_at` left empty, a selected publication waiting for its curation; a curation pass
+    moves a `selected` or `curated` one to `selected` or `curated`, and dates `ai_pass_at`."""
+    association = vh_association(cur, update.pmid)
+    precuration = association.state == "pending"
+    allowed = ("selected", "discarded") if precuration else ("selected", "curated")
+    if not precuration:
+        _writable(association)
+    if update.state not in allowed:
+        raise InvalidRow(
+            f"publication {association.pmid} of run {association.run} is {association.state}: "
+            f"it can become {' or '.join(allowed)}, not {update.state}"
+        )
+    pass_at = "ai_pass_at" if precuration else "now()"
     cur.execute(
-        f"UPDATE associations SET state = %s, annotation = {NEW_NOTE}, ai_pass_at = now(), "
+        f"UPDATE associations SET state = %s, annotation = {NEW_NOTE}, ai_pass_at = {pass_at}, "
         "updated_at = now() WHERE id = %s",
         (update.state, _dated(cur, update.note, author), association.id),
     )
@@ -607,8 +622,9 @@ def update_publications(
     author: str = "",
     commit: bool = False,
 ) -> Outcome:
-    """Set the state of publications of vh runs at the end of a pass (`ai_pass_at`), the note of
-    the pass, after its date and its author (optional), first in their notes."""
+    """Set the state of publications of vh runs at the end of a pass, a pre-curation or a curation
+    (`_publication`), the note of the pass, after its date and its author (optional), first in
+    their notes."""
     return write_batch(conn, [], [], updates, author=author, commit=commit)
 
 

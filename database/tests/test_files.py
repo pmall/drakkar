@@ -139,9 +139,9 @@ def test_publications_are_read_from_json_lines(tmp_path: Path):
 
 def test_a_publication_in_another_state_is_refused_with_its_line(tmp_path: Path):
     path = tmp_path / "publications.jsonl"
-    row = {"pmid": 22046132, "state": "discarded", "note": "DISCARDED: review"}
+    row = {"pmid": 22046132, "state": "pending", "note": "PENDING"}
     path.write_text(json.dumps(row) + "\n")
-    why = "state is 'discarded', not selected or curated"
+    why = "state is 'pending', not selected, curated or discarded"
     with pytest.raises(FileError, match=re.escape(f"{path}:1: {why}")):
         read_publications([path])
 
