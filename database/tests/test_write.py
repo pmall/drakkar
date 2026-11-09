@@ -19,6 +19,7 @@ from database.write import (
 SARS = 22046132  # Q6VA95 `N` carried by EY73D2C965 and EYF737084C
 RABIES = 38566321
 SELECTED = 25031347
+HH = 15471871  # in an hh run
 
 
 def live(conn, pmid) -> dict[str, Revision]:
@@ -28,7 +29,7 @@ def live(conn, pmid) -> dict[str, Revision]:
 
 
 def count(conn) -> int:
-    result = conn.execute("SELECT count(*) FROM descriptions").fetchone()[0]
+    result = conn.execute("SELECT count(*) FROM descriptions_vh").fetchone()[0]
     conn.rollback()
     return result
 
@@ -69,13 +70,13 @@ def test_add_commits(conn, new):
     [stable_id] = outcome.written
     assert stable_id.startswith("CW")
     row = conn.execute(
-        "SELECT version, name1, start1, stop1, name2, start2, stop2, mapping2, annotation "
-        "FROM descriptions WHERE stable_id = %s",
+        "SELECT version, name2, start2, stop2, mapping2, annotation "
+        "FROM descriptions_vh WHERE stable_id = %s",
         (stable_id,),
     ).fetchone()
-    version, name1, start1, stop1, name2, start2, stop2, mapping2, note = row
-    assert (version, name1, start1, name2, start2) == (1, "NEDD4", 1, "P", 1)
-    assert stop1 > 1 and stop2 > 1
+    version, name2, start2, stop2, mapping2, note = row
+    assert (version, name2, start2) == (1, "P", 1)
+    assert stop2 > 1
     assert mapping2[0]["isoforms"][0]["occurrences"][0] == {"start": 1, "stop": 20, "identity": 100}
     assert note == "anti-tag co-IP (MI:0007), Fig. 2B"
 
@@ -121,7 +122,7 @@ def test_a_mapping_below_90_percent_is_skipped(conn, new):
     )
     assert outcome.ok
     [mapping] = conn.execute(
-        "SELECT mapping2 FROM descriptions WHERE stable_id = %s", outcome.written
+        "SELECT mapping2 FROM descriptions_vh WHERE stable_id = %s", outcome.written
     ).fetchone()[0]
     assert mapping["sequence"] == sequence
 
@@ -136,7 +137,7 @@ def test_rename_an_interactor_carried_by_two_descriptions(conn):
     outcome = revise_descriptions(conn, revisions, commit=True)
     assert outcome.ok and outcome.committed
     names = conn.execute(
-        "SELECT stable_id, version, name2 FROM descriptions WHERE deleted_at IS NULL "
+        "SELECT stable_id, version, name2 FROM descriptions_vh WHERE deleted_at IS NULL "
         "AND stable_id IN ('EY73D2C965', 'EYF737084C') ORDER BY stable_id"
     ).fetchall()
     assert names == [("EY73D2C965", 2, "orf6"), ("EYF737084C", 2, "orf6")]
@@ -214,7 +215,7 @@ def test_merge_of_different_descriptions_is_refused(conn):
 
 def test_removal_needs_no_note(conn):
     """The live version is deleted, its note left as it was."""
-    query = "SELECT annotation, deleted_at IS NOT NULL FROM descriptions WHERE stable_id = %s"
+    query = "SELECT annotation, deleted_at IS NOT NULL FROM descriptions_vh WHERE stable_id = %s"
     before = conn.execute(f"{query} AND deleted_at IS NULL", ("EYC9AE3284",)).fetchone()[0]
     conn.rollback()
     removed = replace(live(conn, RABIES)["EYC9AE3284"], action="remove", description=None)
@@ -222,6 +223,47 @@ def test_removal_needs_no_note(conn):
     after = conn.execute(f"{query} ORDER BY version DESC LIMIT 1", ("EYC9AE3284",)).fetchone()
     conn.rollback()
     assert after == (before, True)
+
+
+def hh_revision(conn) -> Revision:
+    """EY1F03BBEB, a live hh description, revised to another method."""
+    a1, a2, method = conn.execute(
+        """
+        SELECT p1.accession, p2.accession, m.psimi_id FROM descriptions_hh AS d
+        JOIN proteins AS p1 ON p1.id = d.protein1_id
+        JOIN proteins AS p2 ON p2.id = d.protein2_id
+        JOIN methods AS m ON m.id = d.method_id
+        WHERE d.stable_id = 'EY1F03BBEB' AND d.deleted_at IS NULL
+        """
+    ).fetchone()
+    conn.rollback()
+    other = "MI:0018" if method != "MI:0018" else "MI:0007"
+    return Revision("EY1F03BBEB", 2, HH, "revise", Description(other, a1, a2), note="FIXED: method")
+
+
+def test_revise_an_hh_description(conn):
+    outcome = revise_descriptions(conn, [hh_revision(conn)], commit=True)
+    assert outcome.ok and outcome.committed
+    versions = conn.execute(
+        "SELECT version, deleted_at IS NULL FROM descriptions_hh WHERE stable_id = 'EY1F03BBEB' "
+        "ORDER BY version"
+    ).fetchall()
+    assert versions == [(1, False), (2, False), (3, True)]
+
+
+def test_a_stable_id_live_in_both_tables_is_refused(conn):
+    conn.execute(
+        """
+        INSERT INTO descriptions_vh (stable_id, version, association_id, method_id, protein1_id,
+            mapping1, protein2_id, name2, start2, stop2, mapping2)
+        SELECT stable_id, version, association_id, method_id, protein1_id, mapping1,
+            protein2_id, 'X', 1, 1, mapping2
+        FROM descriptions_hh WHERE stable_id = 'EY1F03BBEB' AND deleted_at IS NULL
+        """
+    )
+    conn.commit()
+    outcome = revise_descriptions(conn, [hh_revision(conn)])
+    assert outcome.problems[0][1] == "EY1F03BBEB is live in both tables"
 
 
 # --- Publications -------------------------------------------------------------------------------
@@ -289,7 +331,7 @@ def test_extra_end_residues_in_lowercase_are_left_out_of_the_occurrences(conn, n
     outcome = add_descriptions(conn, [tagged], commit=True)
     assert outcome.ok
     [mapping] = conn.execute(
-        "SELECT mapping2 FROM descriptions WHERE stable_id = %s", outcome.written
+        "SELECT mapping2 FROM descriptions_vh WHERE stable_id = %s", outcome.written
     ).fetchone()[0]
     assert mapping["sequence"] == "GST" + sequence and mapping["nter"] == "GST"
     assert mapping["isoforms"][0]["occurrences"][0] == {"start": 1, "stop": 20, "identity": 100}

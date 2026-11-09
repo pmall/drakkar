@@ -82,13 +82,13 @@ def test_export(conn, tmp_path):
     assert [r[0] for r in vh[1:]] == sorted(r[0] for r in vh[1:])
     # a strain placed in its species by placed.tsv
     assert [
-        "EY08ABDB78", "2", "22046132", "MI:0018", "two hybrid", "2019_01", "Q56VL3", "OCIAD2",
+        "VH:EY08ABDB78", "2", "22046132", "MI:0018", "two hybrid", "2019_01", "Q56VL3", "OCIAD2",
         "694009", "SARS-CoV", "nsp13", "663565", "Bat SARS Cov Rs806/2006",
         "2019_01", "D2DJX6", "Helicase (Fragment)", "nsp13", "1", "601",
     ] in vh  # fmt: skip
     # a strain under a species of species.tsv, its deepest
     assert [
-        "EY11D825B6", "1", "25031347", "MI:0004", "affinity chromatography technology",
+        "VH:EY11D825B6", "1", "25031347", "MI:0004", "affinity chromatography technology",
         "2019_01", "P55209", "NAP1L1", "3052230", "HCV", "NS5A", "356411",
         "Hepatitis C virus JFH-1", "2019_01", "Q99IB8", "Genome polyprotein", "NS5A",
         "1977", "2442",
@@ -96,8 +96,8 @@ def test_export(conn, tmp_path):
     cur = conn.cursor()
     cur.execute(
         """
-        SELECT d.stable_id
-        FROM descriptions AS d
+        SELECT 'VH:' || d.stable_id
+        FROM descriptions_vh AS d
         JOIN proteins AS h ON h.id = d.protein1_id
         LEFT JOIN proteins_versions AS current1
           ON current1.accession = h.accession AND current1.version = h.version
@@ -125,7 +125,7 @@ def test_export(conn, tmp_path):
     hh = _lines(tmp_path / "out" / "descriptions_hh_run81.tsv")
     assert hh[0] == HH
     assert hh[1] == [
-        "EY1F03BBEB", "2", "15471871", "MI:0515", "methyltransferase assay",
+        "HH:EY1F03BBEB", "2", "15471871", "MI:0515", "methyltransferase assay",
         "2019_01", "Q96RI1", "NR1H4", "2020_03", "P68431", "H3C1",
     ]  # fmt: skip
 
@@ -195,7 +195,7 @@ def test_mappings(conn, tmp_path):
     homodimer = [{"sequence": "MSSN", "isoforms": [_occurrence("Q96RI1")]}]
     cur.execute(
         """
-        UPDATE descriptions SET protein2_id = protein1_id, mapping1 = %s, mapping2 = %s
+        UPDATE descriptions_hh SET protein2_id = protein1_id, mapping1 = %s, mapping2 = %s
         WHERE stable_id = 'EYD107712D' AND deleted_at IS NULL
         """,
         (json.dumps(homodimer), json.dumps(homodimer)),
@@ -209,7 +209,7 @@ def test_mappings(conn, tmp_path):
     viral = [{"sequence": "MSGSWK", "nter": "M", "cter": "K", "isoforms": [_occurrence("Q99IB8")]}]
     cur.execute(
         """
-        UPDATE descriptions SET mapping1 = %s, mapping2 = %s
+        UPDATE descriptions_vh SET mapping1 = %s, mapping2 = %s
         WHERE stable_id = 'EY11D825B6' AND deleted_at IS NULL
         """,
         (json.dumps(human), json.dumps(viral)),
@@ -220,15 +220,15 @@ def test_mappings(conn, tmp_path):
     v = _lines(tmp_path / "out" / "mappings_v_run81.tsv")
     assert h[0] == MAPPINGS_H and v[0] == MAPPINGS_V
     assert h[1:] == sorted(h[1:]) and v[1:] == sorted(v[1:])
-    assert [line for line in h if line[0] == "EYD107712D"] == [
-        ["EYD107712D", "MSSN", "2019_01", "Q96RI1", "Q96RI1", "h", "", ""]
+    assert [line for line in h if line[0] == "HH:EYD107712D"] == [
+        ["HH:EYD107712D", "MSSN", "2019_01", "Q96RI1", "Q96RI1", "h", "", ""]
     ]
-    assert [line for line in h if line[0] == "EY11D825B6"] == [
-        ["EY11D825B6", "AAAA", "2019_01", "P55209", "P55209-2", "v", "", ""],
-        ["EY11D825B6", "MADI", "2019_01", "P55209", "P55209", "v", "", ""],
+    assert [line for line in h if line[0] == "VH:EY11D825B6"] == [
+        ["VH:EY11D825B6", "AAAA", "2019_01", "P55209", "P55209-2", "v", "", ""],
+        ["VH:EY11D825B6", "MADI", "2019_01", "P55209", "P55209", "v", "", ""],
     ]
-    assert [line for line in v if line[0] == "EY11D825B6"] == [
-        ["EY11D825B6", "mSGSWk", "2019_01", "Q99IB8", "1977", "2442", "Q99IB8", "M", "K"]
+    assert [line for line in v if line[0] == "VH:EY11D825B6"] == [
+        ["VH:EY11D825B6", "mSGSWk", "2019_01", "Q99IB8", "1977", "2442", "Q99IB8", "M", "K"]
     ]
     descriptions = {
         r[0]

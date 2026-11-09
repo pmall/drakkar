@@ -1,7 +1,7 @@
 """A fresh test database per test, copied from a template built once per session.
 
-The template is `sql/schema.sql` and `fixture.sql` (`build_fixture.py`), loaded into
-`<POSTGRES_DB>_test_template` on the server of `.env`. Each test gets its own copy,
+The template is `sql/schema.sql` (`scripts/schema.py`) and `fixture.sql` (`build_fixture.py`),
+loaded into `<POSTGRES_DB>_test_template` on the server of `.env`. Each test gets its own copy,
 `<POSTGRES_DB>_test`, so tests can commit.
 """
 

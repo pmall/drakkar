@@ -168,9 +168,19 @@ def check_export(
     # those merged (the same sequence on both sides of a homodimer)
     cur.execute(
         """
-        WITH live AS (
-            SELECT r.type,
-                   c1.reviewed IS TRUE AND (r.type = 'vh' OR c2.reviewed IS TRUE) AS exported,
+        WITH descriptions AS (
+            SELECT 'vh' AS type, association_id, protein1_id, mapping1, protein2_id, mapping2
+            FROM descriptions_vh
+            WHERE deleted_at IS NULL AND association_id IN (
+                SELECT id FROM associations WHERE run_id = ANY(%s)
+            )
+            UNION ALL
+            SELECT 'hh', association_id, protein1_id, mapping1, protein2_id, mapping2
+            FROM descriptions_hh WHERE deleted_at IS NULL
+        ),
+        live AS (
+            SELECT d.type,
+                   c1.reviewed IS TRUE AND (d.type = 'vh' OR c2.reviewed IS TRUE) AS exported,
                    json_array_length(d.mapping1) + json_array_length(d.mapping2) AS mappings,
                    CASE WHEN d.protein1_id = d.protein2_id THEN (
                        SELECT count(*)
@@ -179,15 +189,12 @@ def check_export(
                          ON m2.value ->> 'sequence' = m1.value ->> 'sequence'
                    ) ELSE 0 END AS merged
             FROM descriptions AS d
-            JOIN associations AS a ON a.id = d.association_id
-            JOIN runs AS r ON r.id = a.run_id
             JOIN proteins AS p1 ON p1.id = d.protein1_id
             LEFT JOIN proteins_versions AS c1
               ON c1.accession = p1.accession AND c1.version = p1.version
             JOIN proteins AS p2 ON p2.id = d.protein2_id
             LEFT JOIN proteins_versions AS c2
               ON c2.accession = p2.accession AND c2.version = p2.version
-            WHERE d.deleted_at IS NULL AND (r.type = 'hh' OR a.run_id = ANY(%s))
         )
         SELECT type,
                count(*) AS live,
@@ -233,12 +240,13 @@ def export(
     runs = _runs(cur, run)
     cur.execute(
         """
-        SELECT d.stable_id, d.version, a.pmid, m.psimi_id, m.name AS method,
+        SELECT 'VH:' || d.stable_id AS stable_id, d.version, a.pmid, m.psimi_id,
+               m.name AS method,
                h.version AS release1, h.accession AS accession1, h.name AS gene_name1,
                v.id AS protein2_id, v.ncbi_taxon_id AS strain_ncbi_taxon_id,
                v.version AS release2, v.accession AS accession2, v.description AS uniprot_name2,
                d.name2 AS generic_name2, d.start2, d.stop2, d.mapping1, d.mapping2
-        FROM descriptions AS d
+        FROM descriptions_vh AS d
         JOIN associations AS a ON a.id = d.association_id
         JOIN methods AS m ON m.id = d.method_id
         JOIN proteins AS h ON h.id = d.protein1_id
@@ -283,13 +291,13 @@ def export(
 
     cur.execute(
         """
-        SELECT d.stable_id, d.version, a.pmid, m.psimi_id, m.name AS method,
+        SELECT 'HH:' || d.stable_id AS stable_id, d.version, a.pmid, m.psimi_id,
+               m.name AS method,
                h1.version AS release1, h1.accession AS accession1, h1.name AS gene_name1,
                h2.version AS release2, h2.accession AS accession2, h2.name AS gene_name2,
                d.mapping1, d.mapping2
-        FROM descriptions AS d
+        FROM descriptions_hh AS d
         JOIN associations AS a ON a.id = d.association_id
-        JOIN runs AS r ON r.id = a.run_id
         JOIN methods AS m ON m.id = d.method_id
         JOIN proteins AS h1 ON h1.id = d.protein1_id
         JOIN proteins_versions AS current1
@@ -297,7 +305,7 @@ def export(
         JOIN proteins AS h2 ON h2.id = d.protein2_id
         JOIN proteins_versions AS current2
           ON current2.accession = h2.accession AND current2.version = h2.version
-        WHERE d.deleted_at IS NULL AND r.type = 'hh' AND current1.reviewed AND current2.reviewed
+        WHERE d.deleted_at IS NULL AND current1.reviewed AND current2.reviewed
         ORDER BY d.stable_id
         """
     )

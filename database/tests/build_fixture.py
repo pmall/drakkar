@@ -1,26 +1,21 @@
-"""Write the structure of the Drakkar database, `sql/schema.sql`, and the test fixture,
-`tests/fixture.sql`: the tests load both.
+"""Write the test fixture, `tests/fixture.sql`, from the Drakkar database: the tests load it after
+`sql/schema.sql` (`database/scripts/schema.py`).
 
 The fixture is a few real publications, with every version of their descriptions, the snapshots
 they use and the current snapshots of the same proteins, the taxa of those proteins with their
-lineage, and all the methods. Its rows follow the columns of the schema, so both are written
-together. Run it again when the structure changes, or to change the fixture:
+lineage, and all the methods. Its rows follow the columns of the schema: run it again after
+`schema.py` when the structure changes, or to change the fixture:
 
     uv run python tests/build_fixture.py
 """
 
-import os
-import subprocess
 from pathlib import Path
 
 import psycopg
-from dotenv import load_dotenv
 
 from database.db import connect
 
 HERE = Path(__file__).parent
-SCHEMA = HERE.parent / "sql" / "schema.sql"
-SCHEMA_HEADER = "-- The structure of Drakkar, written by tests/build_fixture.py: never edit it."
 
 # (run ID, PMID): why it is in the fixture.
 PUBLICATIONS = {
@@ -46,49 +41,15 @@ TABLES = {
     "taxon_name": "SELECT * FROM taxon_name WHERE taxon_id = ANY(%(taxa)s)",
     "proteins": "SELECT * FROM proteins WHERE id = ANY(%(proteins)s)",
     "proteins_versions": "SELECT * FROM proteins_versions WHERE accession = ANY(%(accessions)s)",
-    "descriptions": "SELECT * FROM descriptions WHERE association_id = ANY(%(associations)s)",
+    "descriptions_vh": "SELECT * FROM descriptions_vh WHERE association_id = ANY(%(associations)s)",
+    "descriptions_hh": "SELECT * FROM descriptions_hh WHERE association_id = ANY(%(associations)s)",
 }
 SEQUENCES = {
     "associations_id_seq": "associations",
-    "descriptions_id_seq": "descriptions",
     "methods_id_seq": "methods",
     "proteins_id_seq": "proteins",
     "runs_id_seq": "runs",
 }
-
-
-def schema() -> str:
-    load_dotenv()
-    dump = subprocess.run(
-        [
-            "pg_dump",
-            "--schema-only",
-            "--no-owner",
-            "--no-privileges",
-            "-h",
-            os.environ["POSTGRES_HOST"],
-            "-p",
-            os.environ["POSTGRES_PORT"],
-            "-U",
-            os.environ["POSTGRES_USER"],
-            os.environ["POSTGRES_DB"],
-        ],
-        env={**os.environ, "PGPASSWORD": os.environ["POSTGRES_PASSWORD"]},
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout
-    # Keep the statements only: drop pg_dump's comments and session settings, and its `\restrict`
-    # lines, which carry a random key, so the file only changes with the schema.
-    lines = [
-        line
-        for line in dump.splitlines()
-        if not line.startswith(("--", "SET ", "SELECT pg_catalog.set_config", "\\"))
-    ]
-    text = "\n".join(lines)
-    while "\n\n\n" in text:
-        text = text.replace("\n\n\n", "\n\n")
-    return f"{SCHEMA_HEADER}\n\n{text.strip()}\n"
 
 
 def fixture() -> str:
@@ -104,8 +65,12 @@ def fixture() -> str:
         ids = [r[0] for r in cur.fetchall()]
         assert len(ids) == len(pairs), ids
         cur.execute(
-            "SELECT protein1_id FROM descriptions WHERE association_id = ANY(%(ids)s) "
-            "UNION SELECT protein2_id FROM descriptions WHERE association_id = ANY(%(ids)s)",
+            """
+            SELECT protein1_id FROM descriptions_vh WHERE association_id = ANY(%(ids)s)
+            UNION SELECT protein2_id FROM descriptions_vh WHERE association_id = ANY(%(ids)s)
+            UNION SELECT protein1_id FROM descriptions_hh WHERE association_id = ANY(%(ids)s)
+            UNION SELECT protein2_id FROM descriptions_hh WHERE association_id = ANY(%(ids)s)
+            """,
             {"ids": ids},
         )
         used = [r[0] for r in cur.fetchall()]
@@ -147,7 +112,7 @@ def fixture() -> str:
         for table, query in TABLES.items():
             out.append(f"COPY public.{table} FROM stdin;")
             sql = cur.mogrify(query, params)
-            with cur.copy(f"COPY ({sql} ORDER BY 1) TO STDOUT") as copy:
+            with cur.copy(f"COPY ({sql} ORDER BY 1, 2) TO STDOUT") as copy:
                 out.append(b"".join(bytes(block) for block in copy).decode().rstrip("\n"))
             out += ["\\.", ""]
         for sequence, table in SEQUENCES.items():
@@ -159,7 +124,6 @@ def fixture() -> str:
 
 
 def main() -> None:
-    SCHEMA.write_text(schema())
     (HERE / "fixture.sql").write_text(fixture())
 
 

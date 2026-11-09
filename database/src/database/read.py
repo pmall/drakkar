@@ -248,8 +248,13 @@ def methods(cur: Any, texts: list[str], page: Page = DEFAULT) -> str:
     cur.execute(
         """
         WITH uses AS (
-            SELECT method_id, count(*) AS descriptions FROM descriptions
-            WHERE deleted_at IS NULL GROUP BY method_id
+            SELECT method_id, count(*) AS descriptions
+            FROM (
+                SELECT method_id FROM descriptions_vh WHERE deleted_at IS NULL
+                UNION ALL
+                SELECT method_id FROM descriptions_hh WHERE deleted_at IS NULL
+            ) AS live
+            GROUP BY method_id
         )
         SELECT m.psimi_id, m.name, m.synonyms, m.is_detection, coalesce(u.descriptions, 0)
         FROM methods AS m LEFT JOIN uses AS u ON u.method_id = m.id
@@ -399,7 +404,7 @@ def _generic_names(cur: Any, snapshot: int) -> list[str]:
     cur.execute(
         """
         SELECT name2, start2, stop2, count(*) AS descriptions
-        FROM descriptions
+        FROM descriptions_vh
         WHERE protein2_id = %s AND deleted_at IS NULL
         GROUP BY name2, start2, stop2
         ORDER BY start2, stop2, name2
@@ -627,10 +632,10 @@ def names(cur: Any, taxa: list[int]) -> str:
         cur.execute(
             """
             SELECT d.name2, p.accession, d.start2, d.stop2, count(*) AS descriptions
-            FROM descriptions AS d
+            FROM descriptions_vh AS d
             JOIN proteins AS p ON p.id = d.protein2_id
             JOIN proteins_versions AS v ON v.accession = p.accession AND v.version = p.version
-            WHERE d.deleted_at IS NULL AND p.type = 'v' AND p.ncbi_taxon_id = ANY(%s)
+            WHERE d.deleted_at IS NULL AND p.ncbi_taxon_id = ANY(%s)
             GROUP BY d.name2, p.accession, d.start2, d.stop2
             ORDER BY descriptions DESC, d.name2, p.accession, d.start2
             """,

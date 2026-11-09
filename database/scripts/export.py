@@ -14,7 +14,8 @@ in `species.tsv` or a name with no protein is reported, and nothing is written.
 Each dataset is written as a `.tsv` file, tab-separated under a header line, and an `.xlsx` file,
 the same lines; each name ends with `run` and the name of the last vh run exported by ID, each
 character other than a letter, a digit or `-` made a `-`
-(`descriptions_vh_run87.tsv`):
+(`descriptions_vh_run87.tsv`). A description's stable ID is given after its type, `HH:EY12AB34CD`
+or `VH:CW12AB34CD`: a stable ID is unique within its type only.
 
 - `descriptions_hh`: `stable_id`, `version`, `pmid`, `psimi_id`, `method`; each human interactor:
   `release1` (the release its snapshot first appeared in), `accession1`, `gene_name1`, then

@@ -279,8 +279,8 @@ def fetch_table(cur: Any, sql: LiteralString) -> tuple[list[str], list[tuple[Any
 
 def upgrade(conn: psycopg.Connection, release_directory: Path, *, commit: bool) -> str:
     """Upgrades the proteins to the release of the directory in a transaction of its own,
-    committed only with `commit`, rolled back otherwise, then refreshes the dataset after a commit;
-    returns its report. A release already in `proteins` raises `ValueError`."""
+    committed only with `commit`, rolled back otherwise; returns its report. A release already in
+    `proteins` raises `ValueError`."""
     start = time.time()
     release = release_directory.resolve().name
     directory = release_directory / "uniprot"
@@ -361,7 +361,7 @@ def upgrade(conn: psycopg.Connection, release_directory: Path, *, commit: bool) 
         cur.execute("ALTER TABLE secondary ADD PRIMARY KEY (secondary_accession)")
         cur.execute("""
             CREATE TEMP TABLE obsolete_uses ON COMMIT DROP AS
-            SELECT d.stable_id, a.pmid, r.type AS run_type, used.side, p.type, p.accession,
+            SELECT d.stable_id, a.pmid, d.run_type, used.side, p.type, p.accession,
                    p.version AS old_version, s.accession IS NOT NULL AS in_release,
                    CASE
                      WHEN s.accession IS NULL THEN 'removed'
@@ -372,16 +372,20 @@ def upgrade(conn: psycopg.Connection, release_directory: Path, *, commit: bool) 
                      ELSE 'gene name'
                    END AS reason,
                    sec.accessions AS now_secondary_of
-            FROM descriptions AS d
+            FROM (
+                SELECT 'vh' AS run_type, stable_id, association_id, protein1_id, protein2_id
+                FROM descriptions_vh WHERE deleted_at IS NULL
+                UNION ALL
+                SELECT 'hh', stable_id, association_id, protein1_id, protein2_id
+                FROM descriptions_hh WHERE deleted_at IS NULL
+            ) AS d
             JOIN associations AS a ON a.id = d.association_id
-            JOIN runs AS r ON r.id = a.run_id
             CROSS JOIN LATERAL (VALUES (1, d.protein1_id), (2, d.protein2_id))
                 AS used (side, protein_id)
             JOIN proteins AS p ON p.id = used.protein_id
             LEFT JOIN staging AS s ON s.accession = p.accession
             LEFT JOIN secondary AS sec ON sec.secondary_accession = p.accession
-            WHERE d.deleted_at IS NULL
-            AND NOT EXISTS (  -- an obsolete snapshot
+            WHERE NOT EXISTS (  -- an obsolete snapshot
                 SELECT 1 FROM proteins_versions AS v
                 WHERE v.accession = p.accession AND v.version = p.version
             )
@@ -416,9 +420,6 @@ def upgrade(conn: psycopg.Connection, release_directory: Path, *, commit: bool) 
         if commit:
             conn.commit()
             log(start, "committed")
-            conn.execute("REFRESH MATERIALIZED VIEW dataset")
-            conn.commit()
-            log(start, "dataset refreshed")
         else:
             conn.rollback()
             log(start, "dry run: rolled back")

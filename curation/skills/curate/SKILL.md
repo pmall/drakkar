@@ -90,7 +90,7 @@ In a high-throughput publication, an exception to the tier order: the entry is a
 
 A viral interactor's generic name is the standard name of the protein the publication tested, as the database already names it: reuse that protein's existing name rather than the publication's spelling (`orf6`, not `orf-6`; all "non-structural protein 1" variants → `NS1`). Follow the names used in the database for the strain, then the virus, then the family. Name a new protein in the form its neighbours use.
 
-On one entry, one generic name per region and one region per generic name (enforced). Across the strains of a virus, the same generic name when it can be (not enforced).
+On one snapshot of an entry, one generic name per region and one region per generic name (enforced). Across the strains of a virus, the same generic name when it can be (not enforced).
 
 ## Mature protein
 
@@ -146,7 +146,7 @@ The database scripts (`./database/scripts/read.py`, `./database/scripts/mapping.
 
 Tables:
 
-- `descriptions`: `stable_id`, `version`, `association_id`, `method_id`, `protein1_id`, `protein2_id`, `start2`, `stop2`, `name2`; live when `deleted_at` is null.
+- `descriptions_vh`: `stable_id`, `version`, `association_id`, `method_id`, `protein1_id`, `protein2_id`, `start2`, `stop2`, `name2`; live when `deleted_at` is null.
 - `proteins`, one row per snapshot: `id`, `accession`, `type` `h` or `v`, `ncbi_taxon_id`, `version`.
 - `proteins_versions`, the current snapshots: `accession`, `version`, `reviewed`.
 - `methods`: `id`, `psimi_id`, `name`.

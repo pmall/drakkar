@@ -38,11 +38,11 @@ One meaning per word, used everywhere: docs, code, reports and conversations. Wh
 
 | Term | Meaning |
 | -- | -- |
-| Coordinates | The start and stop of an interactor on the canonical sequence of its snapshot, 1-based and inclusive. |
-| Interactor | (accession, start, stop), reached through the snapshot it points to. |
-| Human interactor | Always the full protein: coordinates 1 to the length. Named by its gene name (`name1`; in hh, `name2` too). |
-| Viral interactor | A full viral protein or a mature protein (`protein2_id`, `start2`, `stop2` in vh). Named by its generic name (`name2`). |
-| Generic name | The standard name of a viral interactor (e.g. `NS1`), independent of how UniProt or the publication names it. One viral interactor has one generic name, and in one protein a generic name names one viral interactor: (accession, start, stop) ↔ (accession, generic name). |
+| Coordinates | The start and stop of a viral interactor on the canonical sequence of its snapshot, 1-based and inclusive. |
+| Interactor | What one side of a description points to, a sequence: a human or a viral interactor. |
+| Human interactor | A human snapshot, the whole protein (`protein1_id`, and `protein2_id` in hh). Named by the gene name of the snapshot. |
+| Viral interactor | (snapshot, start, stop): a full viral protein or a mature protein of a viral snapshot (`protein2_id`, `start2`, `stop2`). Two snapshots of one accession make two interactors. Named by its generic name (`name2`). |
+| Generic name | The standard name of a viral interactor (e.g. `NS1`), independent of how UniProt or the publication names it. One viral interactor has one generic name, and on one snapshot a generic name names one viral interactor: (snapshot, start, stop) ↔ (snapshot, generic name). |
 | Generic viral protein | A viral protein of the derived datasets: one node of an interaction graph, one name in a species, grouping the generic names of that species that make sense as a single viral protein (`datasets.md`). |
 | Method | A PSI-MI interaction detection method (`methods`, e.g. `MI:0007`). |
 | Description | One row of evidence: a publication × a method × a human interactor × a viral interactor (hh: two human interactors), with its mappings. This combination, (PMID, PSI-MI ID, interactor 1, interactor 2), is recorded once. Two mature proteins of the same cleaved protein are two interactors, so two descriptions. |
@@ -56,7 +56,7 @@ One meaning per word, used everywhere: docs, code, reports and conversations. Wh
 | Live | The version of a description that is in use (`deleted_at` null). At most one per stable ID. |
 | Revision | Writing a new version of a description: the live version is deleted and the new one created at the same instant. |
 | Deleted version | A version with `deleted_at` set. It never counts: not in the datasets, not in the checks of live data. |
-| Description note | The free text of a description version (`descriptions.annotation`): the curation's decisions on that version (`database.md#notes`). |
+| Description note | The free text of a description version (its `annotation`): the curation's decisions on that version (`database.md#notes`). |
 | Removed description | A stable ID whose last version is deleted, with no successor. Nothing is ever physically deleted. |
 | Obsolete interactor | An interactor that points to an obsolete snapshot. Interactors go obsolete, not descriptions. |
 | Obsolete description | A live description with at least one obsolete interactor. Not the same as deleted: an obsolete description is live and counts (its mappings feed the mappings dataset when its human target is up to date). |

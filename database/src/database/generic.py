@@ -121,12 +121,12 @@ def sync(cur: Any, directory: Path) -> str:
     cur.execute(
         """
         SELECT v.ncbi_taxon_id, d.name2, count(*) AS descriptions
-        FROM descriptions AS d
+        FROM descriptions_vh AS d
         JOIN proteins AS v ON v.id = d.protein2_id
         JOIN proteins AS h ON h.id = d.protein1_id
         JOIN proteins_versions AS current
           ON current.accession = h.accession AND current.version = h.version
-        WHERE d.deleted_at IS NULL AND v.type = 'v' AND current.reviewed
+        WHERE d.deleted_at IS NULL AND current.reviewed
         GROUP BY v.ncbi_taxon_id, d.name2
         """
     )
@@ -135,10 +135,10 @@ def sync(cur: Any, directory: Path) -> str:
     cur.execute(
         """
         SELECT v.ncbi_taxon_id, a.pmid
-        FROM descriptions AS d
+        FROM descriptions_vh AS d
         JOIN associations AS a ON a.id = d.association_id
         JOIN proteins AS v ON v.id = d.protein2_id
-        WHERE d.deleted_at IS NULL AND v.type = 'v'
+        WHERE d.deleted_at IS NULL
         GROUP BY v.ncbi_taxon_id, a.pmid
         """
     )

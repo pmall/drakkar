@@ -29,6 +29,9 @@ from database import check
 from database.align import MIN_IDENTITY, best_identity, map_sequence, read_written, written
 from database.db import require_idle
 
+# The table of the descriptions of each run type.
+TABLES = {"vh": "descriptions_vh", "hh": "descriptions_hh"}
+
 
 class InvalidRow(ValueError):
     def __init__(self, *problems: str) -> None:
@@ -42,8 +45,8 @@ class Description:
 
     `accession1` is the human interactor, `accession2` the viral one in vh, human in hh.
     `start2`/`stop2` default to the full protein; a mature protein gets its coordinates. `name2`
-    is the generic name of a viral interactor (in hh, the gene name, derived). Human names and
-    coordinates are derived from the snapshots.
+    is the generic name of a viral interactor. A human interactor is its whole snapshot: its name
+    and coordinates are not stored, and in hh `name2`, `start2` and `stop2` stay empty.
     Mappings are the sequences the experiment used, their extra end residues in lowercase
     (`database.align`); their occurrences are computed by `map_sequence`, and a mapping whose best
     identity is below `MIN_IDENTITY` is skipped.
@@ -248,7 +251,8 @@ def _build(
     item: Description,
     kept: tuple[tuple[str, int], tuple[str, int]] | None = None,
 ) -> dict[str, Any]:
-    """The columns of a description; raise `InvalidRow` with every problem found.
+    """The columns of a description in the table of its run's type; raise `InvalidRow` with
+    every problem found.
 
     `kept` is the (accession, snapshot ID) of each side of a revised description: a side that
     keeps its accession keeps its snapshot, even obsolete; otherwise the current snapshot.
@@ -278,8 +282,8 @@ def _build(
 
     start2 = 1 if item.start2 is None else item.start2
     stop2 = p2.length if item.stop2 is None else item.stop2
+    name2 = ""
     if association.run_type == "hh":
-        name2 = p2.gene
         if (start2, stop2) != (1, p2.length):
             problems.append(f"protein 2: a human interactor is 1-{p2.length}, not {start2}-{stop2}")
     else:
@@ -318,33 +322,31 @@ def _build(
         mappings.append(computed)
     if problems:
         raise InvalidRow(*problems)
-    return {
+    row: dict[str, Any] = {
         "association_id": association.id,
         "method_id": method[0],  # type: ignore[index]
         "protein1_id": p1.id,
-        "name1": p1.gene,
-        "start1": 1,
-        "stop1": p1.length,
         "mapping1": json.dumps(mappings[0]),
         "protein2_id": p2.id,
-        "name2": name2,
-        "start2": start2,
-        "stop2": stop2,
-        "mapping2": json.dumps(mappings[1]),
     }
+    if association.run_type == "vh":
+        row |= {"name2": name2, "start2": start2, "stop2": stop2}
+    return row | {"mapping2": json.dumps(mappings[1])}
 
 
-def _insert(cur: Any, stable_id: str, version: int, row: dict[str, Any], note: str) -> None:
+def _span(row: dict[str, Any]) -> tuple[int | None, int | None]:
+    """The coordinates of the second interactor of a built row: none in hh."""
+    return row.get("start2"), row.get("stop2")
+
+
+def _insert(
+    cur: Any, run_type: str, stable_id: str, version: int, row: dict[str, Any], note: str
+) -> None:
+    values = {**row, "stable_id": stable_id, "version": version, "annotation": note}
     cur.execute(
-        """
-        INSERT INTO descriptions (stable_id, version, association_id, method_id,
-            protein1_id, name1, start1, stop1, mapping1,
-            protein2_id, name2, start2, stop2, mapping2, annotation)
-        VALUES (%(stable_id)s, %(version)s, %(association_id)s, %(method_id)s,
-            %(protein1_id)s, %(name1)s, %(start1)s, %(stop1)s, %(mapping1)s,
-            %(protein2_id)s, %(name2)s, %(start2)s, %(stop2)s, %(mapping2)s, %(annotation)s)
-        """,
-        {**row, "stable_id": stable_id, "version": version, "annotation": note},
+        f"INSERT INTO {TABLES[run_type]} ({', '.join(values)}) "
+        f"VALUES ({', '.join(f'%({column})s' for column in values)})",
+        values,
     )
 
 
@@ -352,10 +354,14 @@ def _insert(cur: Any, stable_id: str, version: int, row: dict[str, Any], note: s
 
 
 def _new_stable_id(cur: Any) -> str:
-    """A `CW` stable ID unused by any row, live or deleted."""
+    """A `CW` stable ID unused by any row of either table, live or deleted."""
     while True:
         candidate = "CW" + secrets.token_hex(4).upper()
-        cur.execute("SELECT 1 FROM descriptions WHERE stable_id = %s", (candidate,))
+        cur.execute(
+            "SELECT 1 FROM descriptions_vh WHERE stable_id = %(id)s "
+            "UNION ALL SELECT 1 FROM descriptions_hh WHERE stable_id = %(id)s",
+            {"id": candidate},
+        )
         if cur.fetchone() is None:
             return candidate
 
@@ -365,7 +371,7 @@ def _add(cur: Any, item: NewDescription) -> str:
     note = item.note.strip()
     row = _build(cur, association, item.description)
     stable_id = _new_stable_id(cur)
-    _insert(cur, stable_id, 1, row, note)
+    _insert(cur, association.run_type, stable_id, 1, row, note)
     return stable_id
 
 
@@ -379,17 +385,22 @@ def add_descriptions(
 # --- Revising -----------------------------------------------------------------------------------
 
 
-def _live(cur: Any, revision: Revision) -> tuple[int, int, Association]:
-    """The live row of a revision's stable ID, locked: its row ID, version and publication."""
-    cur.execute(
-        "SELECT id, version, association_id FROM descriptions "
-        "WHERE stable_id = %s AND deleted_at IS NULL FOR UPDATE",
-        (revision.stable_id,),
-    )
-    row = cur.fetchone()
-    if row is None:
+def _live(cur: Any, revision: Revision) -> tuple[str, int, Association]:
+    """The live row of a revision's stable ID, locked, in either table: the run type of its
+    table, its version and its publication."""
+    found: list[tuple[str, int, int]] = []
+    for run_type, table in TABLES.items():
+        cur.execute(
+            f"SELECT version, association_id FROM {table} "
+            "WHERE stable_id = %s AND deleted_at IS NULL FOR UPDATE",
+            (revision.stable_id,),
+        )
+        found += [(run_type, *row) for row in cur.fetchall()]
+    if not found:
         raise InvalidRow(f"{revision.stable_id} has no live version")
-    id_, version, association_id = row
+    if len(found) > 1:
+        raise InvalidRow(f"{revision.stable_id} is live in both tables")
+    run_type, version, association_id = found[0]
     if version != revision.version:
         raise InvalidRow(
             f"{revision.stable_id}: decided on version {revision.version}, "
@@ -402,39 +413,39 @@ def _live(cur: Any, revision: Revision) -> tuple[int, int, Association]:
             f"{revision.stable_id} is a description of publication {association.pmid}, "
             f"not {revision.pmid}"
         )
-    return id_, version, association
+    return run_type, version, association
 
 
-# The live version of a stable ID: what a revision keeps, and what makes it a duplicate.
-LIVE_DESCRIPTION = """
-    SELECT d.association_id, d.method_id, p1.accession, p1.id, p2.accession, p2.id,
-           d.start2, d.stop2, d.mapping1::text, d.mapping2::text
-    FROM descriptions AS d
-    JOIN proteins AS p1 ON p1.id = d.protein1_id
-    JOIN proteins AS p2 ON p2.id = d.protein2_id
-    WHERE d.stable_id = %s AND d.deleted_at IS NULL
-"""
-
-# The columns `_build` gives.
-COLUMNS = """
-    SELECT association_id, method_id, protein1_id, name1, start1, stop1, mapping1,
-           protein2_id, name2, start2, stop2, mapping2
-    FROM descriptions WHERE id = %s
-"""
+def _live_description(cur: Any, run_type: str, stable_id: str) -> tuple[Any, ...] | None:
+    """The live version of a stable ID: what a revision keeps, and what makes it a duplicate;
+    the coordinates of the second interactor are null in hh."""
+    span = "d.start2, d.stop2" if run_type == "vh" else "NULL::int, NULL::int"
+    cur.execute(
+        f"""
+        SELECT d.association_id, d.method_id, p1.accession, p1.id, p2.accession, p2.id,
+               {span}, d.mapping1::text, d.mapping2::text
+        FROM {TABLES[run_type]} AS d
+        JOIN proteins AS p1 ON p1.id = d.protein1_id
+        JOIN proteins AS p2 ON p2.id = d.protein2_id
+        WHERE d.stable_id = %s AND d.deleted_at IS NULL
+        """,
+        (stable_id,),
+    )
+    return cur.fetchone()
 
 
 def _sequences(mappings: str) -> set[str]:
     return {m["sequence"] for m in json.loads(mappings)}
 
 
-def _check_merge(cur: Any, revision: Revision, removed: tuple[Any, ...]) -> None:
-    """The removed description (publication, method, interactors, mappings) is in its survivor."""
-    cur.execute(LIVE_DESCRIPTION, (revision.into,))
-    survivor = cur.fetchone()
+def _check_merge(cur: Any, run_type: str, revision: Revision, removed: tuple[Any, ...]) -> None:
+    """The removed description (publication, method, interactors, mappings) is in its survivor,
+    in the same table."""
+    survivor = _live_description(cur, run_type, revision.into)
     if survivor is None:
         raise InvalidRow(f"{revision.into}, the survivor, has no live version")
-    association_id, method_id, accession1, _, accession2, _, start2, stop2, m1, m2 = survivor
-    if removed[:6] != (association_id, method_id, accession1, accession2, start2, stop2):
+    association_id, method_id, _, snapshot1, _, snapshot2, start2, stop2, m1, m2 = survivor
+    if removed[:6] != (association_id, method_id, snapshot1, snapshot2, start2, stop2):
         raise InvalidRow(
             f"{revision.stable_id} and {revision.into} differ in publication, method or "
             "interactors: not duplicates"
@@ -448,9 +459,11 @@ def _check_merge(cur: Any, revision: Revision, removed: tuple[Any, ...]) -> None
 
 
 def _revise(cur: Any, revision: Revision) -> str | None:
-    live_id, version, association = _live(cur, revision)
-    cur.execute(LIVE_DESCRIPTION, (revision.stable_id,))
-    _, method_id, a1, id1, a2, id2, start2, stop2, mappings1, mappings2 = cur.fetchone()
+    run_type, version, association = _live(cur, revision)
+    table = TABLES[run_type]
+    live = _live_description(cur, run_type, revision.stable_id)
+    assert live is not None  # locked by `_live`
+    _, method_id, a1, id1, a2, id2, start2, stop2, mappings1, mappings2 = live
     kept = ((a1, id1), (a2, id2))
     item = revision.description
     note = revision.note.strip()
@@ -459,37 +472,43 @@ def _revise(cur: Any, revision: Revision) -> str | None:
         if revision.into:
             # The removed description, as it is or as it was decided to be, is its survivor.
             if item is None:
-                removed = (association.id, method_id, a1, a2, start2, stop2)
+                removed = (association.id, method_id, id1, id2, start2, stop2)
                 removed += (_sequences(mappings1), _sequences(mappings2))
             else:
                 row = _build(cur, association, item, kept)
-                removed = (association.id, row["method_id"], item.accession1, item.accession2)
-                removed += (row["start2"], row["stop2"])
+                removed = (association.id, row["method_id"], row["protein1_id"], row["protein2_id"])
+                removed += _span(row)
                 removed += (_sequences(row["mapping1"]), _sequences(row["mapping2"]))
-            _check_merge(cur, revision, removed)
+            _check_merge(cur, run_type, revision, removed)
         elif item is not None:
             raise InvalidRow("a removal without `into` takes no description")
         # The live version is deleted, its note gets the REMOVED line.
         cur.execute(
-            "UPDATE descriptions SET deleted_at = now(), "
+            f"UPDATE {table} SET deleted_at = now(), "
             "annotation = concat_ws(E'\\n', nullif(annotation, ''), nullif(%s::text, '')) "
-            "WHERE id = %s",
-            (note, live_id),
+            "WHERE stable_id = %s AND version = %s",
+            (note, revision.stable_id, version),
         )
         return revision.stable_id
 
     if item is None:
         raise InvalidRow(f"{revision.stable_id}: a revision needs its description")
     row = _build(cur, association, item, kept)
-    cur.execute(COLUMNS, (live_id,))
+    cur.execute(
+        f"SELECT {', '.join(row)} FROM {table} WHERE stable_id = %s AND version = %s",
+        (revision.stable_id, version),
+    )
     old = dict(zip(row, cur.fetchone(), strict=True))  # same order; JSON columns come parsed
     new = {**row, "mapping1": json.loads(row["mapping1"]), "mapping2": json.loads(row["mapping2"])}
     if old == new:
         if len(new["mapping1"]) + len(new["mapping2"]) < len(item.mappings1 + item.mappings2):
             return None  # it changes only mappings `_build` skips
         raise InvalidRow(f"the revision of {revision.stable_id} changes nothing")
-    cur.execute("UPDATE descriptions SET deleted_at = now() WHERE id = %s", (live_id,))
-    _insert(cur, revision.stable_id, version + 1, row, note)
+    cur.execute(
+        f"UPDATE {table} SET deleted_at = now() WHERE stable_id = %s AND version = %s",
+        (revision.stable_id, version),
+    )
+    _insert(cur, run_type, revision.stable_id, version + 1, row, note)
     return revision.stable_id
 
 
@@ -505,7 +524,7 @@ def live_revisions(cur: Any, pmid: int) -> list[Revision]:
         """
         SELECT d.stable_id, d.version, m.psimi_id, p1.accession, p2.accession, d.name2, d.start2,
                d.stop2, d.mapping1::text, d.mapping2::text
-        FROM descriptions AS d
+        FROM descriptions_vh AS d
         JOIN methods AS m ON m.id = d.method_id
         JOIN proteins AS p1 ON p1.id = d.protein1_id
         JOIN proteins AS p2 ON p2.id = d.protein2_id

@@ -71,7 +71,7 @@ In a high-throughput publication, an exception to the tier order: the entry is a
 
 A viral interactor's generic name is the standard name of the protein the publication tested, as the database already names it: that protein's existing name is reused rather than the publication's spelling (`orf6`, not `orf-6`; all "non-structural protein 1" variants → `NS1`). The names used in the database are followed for the strain, then the virus, then the family. A new protein is named in the form its neighbours use.
 
-On one entry, one generic name per region and one region per generic name: this is enforced. Across the strains of a virus, the same generic name is used when it can be: this is not enforced.
+On one snapshot of an entry, one generic name per region and one region per generic name: this is enforced. Across the strains of a virus, the same generic name is used when it can be: this is not enforced.
 
 ## The mature protein
 

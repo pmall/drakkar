@@ -54,7 +54,7 @@ def test_empty_coordinates_are_the_full_protein(conn):
 
 def test_a_new_publication_gives_only_additions(conn):
     conn.execute(  # a selected publication without descriptions, in this transaction only
-        "UPDATE descriptions SET deleted_at = now() WHERE association_id = "
+        "UPDATE descriptions_vh SET deleted_at = now() WHERE association_id = "
         "(SELECT id FROM associations WHERE pmid = %s)",
         (SELECTED,),
     )
