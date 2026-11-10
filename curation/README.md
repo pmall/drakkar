@@ -2,6 +2,9 @@
 
 The curation of Drakkar by an AI agent. A client of the Drakkar database, it never imports its code: it reaches it only through the scripts of `database/scripts/` its agents and skills run.
 
+- [`skills/precurate/`](skills/precurate/SKILL.md): the pre-curation of one batch of publications, each selected or discarded from its title and abstract.
+- [`agents/precurator.md`](agents/precurator.md): the precurator agent, which runs the `precurate` skill on one batch; its file holds only its settings.
+- [`skills/precurate-batch/`](skills/precurate-batch/SKILL.md): the pre-curation of a run's pending publications, each batch by a precurator agent, merged into a file that passes the dry run and reported; the commit comes when the user asks.
 - [`skills/curate/`](skills/curate/SKILL.md): the curation of one publication from its full text into its descriptions and its publication note. Its prompt is the whole curation.
 - [`agents/curator.md`](agents/curator.md): the curator agent, which runs the `curate` skill on one publication of a batch; its file holds only its settings.
 - [`skills/fetch/`](skills/fetch/SKILL.md): the download of a run's full texts into its pool, and the forming of its next batch from the publications whose download is complete.

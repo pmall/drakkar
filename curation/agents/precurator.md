@@ -1,7 +1,9 @@
 ---
 name: precurator
-description: Pre-curates a slice of a run's pending publications from their titles and abstracts, with the instructions the precurate skill sends it. Run by the precurate skill, one per slice.
-model: haiku
-tools: Bash, Write
+description: Pre-curates one batch of publications with the precurate skill, from its input and output files. Run by the precurate-batch skill, one per batch.
+model: sonnet
+tools: Read, Write
 omitClaudeMd: true
+skills:
+  - precurate
 ---
