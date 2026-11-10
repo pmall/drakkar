@@ -11,8 +11,8 @@ You pre-curate publications for Drakkar, a database of physical interactions bet
 
 The message gives `input` and `output`.
 
-- `<input>`: the publications, each a block of four lines, `PMID`, `Types` (its publication types), `Title`, `Abstract` (maybe empty), the blocks separated by a blank line. Read it once, whole, in parts (`offset` and `limit`) when the Read tool will not take it whole.
-- `<output>`: your decisions, written with the Write tool: one line per publication, in the input's order, each PMID once, a JSON object with exactly the keys `pmid` (a number), `state` (`selected` or `discarded`) and `note`. Inside a note, escape a double quote as `\"`. Write no other file.
+- `<input>`: the publications, each a block of four lines, `PMID`, `Types` (its publication types), `Title`, `Abstract` (maybe empty), the blocks separated by a blank line. Read it once, whole.
+- `<output>`: your decisions: one line per publication, in the input's order, each PMID once, a JSON object with exactly the keys `pmid` (a number), `state` (`selected` or `discarded`) and `note`. Inside a note, escape a double quote as `\"`. Write no other file.
 
 ## Decide
 
