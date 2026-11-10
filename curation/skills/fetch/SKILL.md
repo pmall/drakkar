@@ -1,19 +1,20 @@
 ---
 name: fetch
 disable-model-invocation: true
-description: "The next batch of a run: its selected publications' full texts downloaded into the run's pool, and up to 20 whose download is complete formed into a batch for the curate-batch skill. The prompt may set the run."
+description: "The next batch of a run: its selected publications' full texts downloaded into the run's pool, and those whose download is complete formed into a batch for the curate-batch skill. The prompt may set the run and the batch size."
 ---
 
 # Fetch a batch
 
-You form the next batch of a run: up to 20 of its publications whose download is complete, the article and every supplementary file it lists but those over 100 MB, left to the curator's judgment. A publication whose download is not complete stays in the run's pool and never reaches a curator. You download and convert; you never read a full text and never write to the database. Read no doc: this skill is the whole process.
+You form the next batch of a run: up to `<size>` of its publications whose download is complete, the article and every supplementary file it lists but those over 100 MB, left to the curator's judgment. A publication whose download is not complete stays in the run's pool and never reaches a curator. You download and convert; you never read a full text and never write to the database. Read no doc: this skill is the whole process.
 
-You download the publications one after another: each is taken as far as it can go, the tools then the browser, and its line written in the pool's status, before the next one starts. The browser is the last resort of each publication, not of the run: it is used for the publication at hand, never kept for the end. Never two publications in parallel, never several in one command (a loop, a script): sites rate-limit or block a burst of requests, the tools' as the browser's, while one publication at a time spreads them out; and after each one you know how many are complete, so you stop at 20.
+You download the publications one after another: each is taken as far as it can go, the tools then the browser, and its line written in the pool's status, before the next one starts. The browser is the last resort of each publication, not of the run: it is used for the publication at hand, never kept for the end. Never two publications in parallel, never several in one command (a loop, a script): sites rate-limit or block a burst of requests, the tools' as the browser's, while one publication at a time spreads them out; and after each one you know how many are complete, so you stop at `<size>`.
 
 1. **Parameters**, from the prompt, otherwise by default:
 
    - `<workdir>`: the curation's root directory.
    - `<run>`: the run's name (`runs.name`), as the user gives it; by default the oldest run with candidates, or with complete publications in its pool.
+   - `<size>`: the batch size, 20 by default.
    - `<pool>`: `<workdir>/run<run>/pool/`, a directory `<pool>/<pmid>/` per publication being downloaded.
    - The candidates, in this order: the pool's publications whose download is not complete, but those closed to which the proxy gives no access, as their line in its status says; then the run's publications `selected` with no AI pass, listed in no `pmids.txt` of the run's batches and not in the pool.
 
@@ -23,9 +24,9 @@ You download the publications one after another: each is taken as far as it can 
    2. The browser, its last resort, for what the tools could not download: a free file from the copies the report tried, a closed one through the library proxy (below).
    3. Its line in `<pool>/status.tsv`, written or replaced, tab-separated under a header line: `pmid`; `missing`, empty when its download is complete, else `article` or the names of the missing supplementary files; `tried`, what was tried for them, each with why it failed (fetch: closed, fetch again, browser, proxy: no access).
 
-3. **The next publication**, the same way, until the pool holds 20 complete publications or no candidate is left. A site that starts refusing every request: stop downloading from it; the pool keeps what is done, for the next session.
+3. **The next publication**, the same way, until the pool holds `<size>` complete publications or no candidate is left. A site that starts refusing every request: stop downloading from it; the pool keeps what is done, for the next session.
 
-4. **Batch**: `<batch>`, `<workdir>/run<run>/batch<n>/`, `<n>` the next batch number in the run. Move the complete publications, up to 20, from `<pool>/<pmid>/` to `<batch>/<pmid>/`, remove their lines from `status.tsv`, then write `<batch>/pmids.txt`, one PMID per line, last: a batch with its `pmids.txt` is ready for the `curate-batch` skill.
+4. **Batch**: `<batch>`, `<workdir>/run<run>/batch<n>/`, `<n>` the next batch number in the run. Move the complete publications, up to `<size>`, from `<pool>/<pmid>/` to `<batch>/<pmid>/`, remove their lines from `status.tsv`, then write `<batch>/pmids.txt`, one PMID per line, last: a batch with its `pmids.txt` is ready for the `curate-batch` skill.
 
 5. **Reply**: the batch and its publications; the publications left in the pool, each with what is missing and what was tried.
 
