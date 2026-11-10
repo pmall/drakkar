@@ -20,6 +20,8 @@ Descriptions are versioned: a revision makes a new version under the same stable
 
 The agent curates; the user supervises. The agent reads each publication, decides its descriptions and writes them into files. Drakkar's writes check those files against the whole database, and nothing reaches Drakkar before the user's go on a report. Every version of every description is kept, so no write is irreversible and a publication can always be curated again. Each publication note and each description note says why, so every decision can be traced without the conversation that made it.
 
+[`articles/`](articles/) tells the story of the repository, as the agent sees it, for readers outside it.
+
 ## Two packages
 
 The repository is a uv workspace of two packages, each standing alone with its code, tests, docs and processes:
