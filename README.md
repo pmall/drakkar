@@ -25,7 +25,7 @@ The agent curates; the user supervises. The agent reads each publication, decide
 The repository is a uv workspace of two packages, each standing alone with its code, tests, docs and processes:
 
 - [`database/`](database/README.md), **the Drakkar database**: its structure, the tools that read, check and write it, the only way to write to it, the UniProt releases it loads and the datasets it exports. It is made for many clients and knows nothing of the curation.
-- [`curation/`](curation/README.md), **the curation**, a client of the Drakkar database: the `precurate` and `precurate-batch` skills, which select a run's publications to curate from their titles and abstracts, the `curate` skill, which curates one publication, the `fetch` skill, which downloads the full texts of a batch of them, the `curate-batch` skill, which curates a batch, one curator agent per publication, the `review` and `review-batch` skills, which review a curated publication or batch, and the tools that fetch and convert full texts. It reaches the database only through its tools.
+- [`curation/`](curation/README.md), **the curation**, a client of the Drakkar database: the `precurate` and `precurate-one` skills, which select a run's publications to curate from their titles and abstracts, the `curate-one` skill, which curates one publication, the `fetch` skill, which downloads the full texts of a batch of them, the `curate` skill, which curates a batch, one curator agent per publication, the `review` and `review-one` skills, which review a curated batch or publication, and the tools that fetch and convert full texts. It reaches the database only through its tools.
 
 [`AGENTS.md`](AGENTS.md) holds the agent's instructions: how it works with the user, writes to and queries the database, and where everything is. [`.claude/`](.claude/) links the agent and the skills of both packages for Claude Code.
 
@@ -40,16 +40,16 @@ cp .env.example .env    # then fill it in, as its comments say
 
 In Claude Code, run from the repository:
 
-- `/precurate-batch` pre-curates a run's pending publications from their titles and abstracts, one precurator agent per batch, and ends with its dry run and report; nothing is written before the user asks for the commit.
+- `/precurate` pre-curates a run's pending publications from their titles and abstracts, one precurator agent per batch, and ends with its dry run and report; nothing is written before the user asks for the commit.
 - `/fetch` downloads the full texts of a run's publications and forms its next batch from those whose download is complete.
-- `/curate-batch` curates a batch, one curator agent per publication, and ends with its dry run and report; nothing is written before the user asks for the commit.
-- `/review-batch`, optional, reviews a curated batch, one reviewer agent per publication, and reports what is wrong; then it makes the fixes the user directs, committed to the database when the user asks.
-- `/precurate` pre-curates one batch of titles and abstracts, as a file.
-- `/curate` curates one publication from its directory into its descriptions and its note, as files.
-- `/review` reviews one curated publication and replies what is wrong; it writes nothing.
+- `/curate` curates a batch, one curator agent per publication, and ends with its dry run and report; nothing is written before the user asks for the commit.
+- `/review`, optional, reviews a curated batch, one reviewer agent per publication, and reports what is wrong; then it makes the fixes the user directs, committed to the database when the user asks.
+- `/precurate-one` pre-curates one batch of titles and abstracts, as a file.
+- `/curate-one` curates one publication from its directory into its descriptions and its note, as files.
+- `/review-one` reviews one curated publication and replies what is wrong; it writes nothing.
 - `/export` exports the derived datasets.
 
-Each skill is started by the user only; the precurator, curator and reviewer agents preload `precurate`, `curate` and `review`. The tools are scripts, run by their path from the repository root, `uv run ./database/scripts/<tool>.py` or `uv run ./curation/scripts/<tool>.py`; `--help` describes each.
+Each skill is started by the user only; the precurator, curator and reviewer agents preload `precurate-one`, `curate-one` and `review-one`. The tools are scripts, run by their path from the repository root, `uv run ./database/scripts/<tool>.py` or `uv run ./curation/scripts/<tool>.py`; `--help` describes each.
 
 ## Development
 

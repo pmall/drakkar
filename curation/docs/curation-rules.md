@@ -1,6 +1,6 @@
 # Curation rules
 
-The biological rules of curation, explained: what is curated, and how each value of a description is identified. The curation applies them as the `curate` skill's prompt states them (`curation/skills/curate/SKILL.md`), their source of truth: a rule changes there and here. The method is the one published in the PNAS 2024 SI appendix (doi:10.1073/pnas.2308776121), with the alignment of a mapping brought to 90 % and its sources widened beyond the article.
+The biological rules of curation: what is curated, and how each value of a description is identified. The `curate-one` skill's prompt (`curation/skills/curate-one/SKILL.md`) repeats them, condensed, for the curator: a rule changes here, then there. The method is the one published in the PNAS 2024 SI appendix (doi:10.1073/pnas.2308776121), with the alignment of a mapping brought to 90 % and its sources widened beyond the article.
 
 ## Principles
 

@@ -1,78 +1,50 @@
 ---
 name: review
-description: "Review of one curated publication against its full text: what the curation misses, then what it records wrong: the prompt of the reviewer agent, which preloads it. Never load or run it on your own: only the user starts it, with /review <dir> <pmid>."
+disable-model-invocation: true
+description: "Review of a curated batch: each publication reviewed by a reviewer agent, the wrong things it finds checked and reported to the user, then the fixes the user directs, written to Drakkar when the user asks for the commit. The prompt names the batch."
 ---
 
-# Review one publication
+# Review a batch
 
-You review the curation of one publication for the database of virus–human protein–protein interactions. A curator read its full text and wrote its descriptions and its note. You check whether the curation is wrong, in two parts: first what the publication shows that the curation leaves out, then what the descriptions record. A thing is wrong only when the publication shows it is. You do not curate it again: for what is left out, you name the pair and where the publication shows it, and look nothing up, so that the review costs far less than the curation did. You write nothing: your reply is the review. Read no doc and no code.
+You review a curated batch: each publication is reviewed by a `reviewer` agent, which looks for what the curation leaves out of the publication, then for what its descriptions record wrong. You check what the reviewers find and report it to the user, who guides what follows: the fixes and their commit. Read no doc, and of a publication only the places you check: this skill is the whole process. No need to `cd`: the scripts run by their path from the repository root, and each path is written from `<batch>`, as in `<batch>/<pmid>/curation.txt`.
 
-## Files
+## Environment
 
-The message gives the publication's directory, `dir`, and its `pmid`. No need to `cd`: you start in the repository root, where the scripts run by their path, and each path is written from `<dir>`, as in `<dir>/manifest.json`.
+- `<batch>`: the batch directory the prompt names, in `<workdir>`, the curation's root directory, written as its absolute path (`realpath`), so that the `dir` each reviewer is sent is right from any directory. Its publications are those of `<batch>/pmids.txt` whose directory `<batch>/<pmid>/` holds `descriptions.jsonl` and `curation.txt`; the others are not reviewed.
+- `<batch>/<pmid>/descriptions.jsonl`: the publication's curation, whole: one description per line, `{"pmid", "method", "accession1", "accession2", "start2", "stop2", "name2", "mappings1", "mappings2", "note"}`, `note` the description note.
+- `<batch>/<pmid>/curation.txt`: the publication note, its first word the state, `CURATED`, or `SELECTED` when a relevant file could not be had.
+- `<batch>/author.txt`: the curation's author, which names the batch's notes when it is committed.
+- Drakkar, the database: the batch is written to it by its commit. A publication is **committed** when Drakkar holds its curation: its note there starts with this curation's, after the date and the batch's author. The user's message says which, or `uv run ./database/scripts/read.py sql "select pmid, state, left(annotation, 120) from associations where pmid in (…)"` shows it.
+- **Commit** means, in this skill, always the commit of a batch's files to Drakkar by `./database/scripts/batch.py`. It never means git: the work directory is no git repository, and nothing of the review goes to git.
 
-- `<dir>/manifest.json`: the files of the full text, their paths relative to `<dir>`: the `article`, the `supplements`, each under the `name` the article gives it, and `figures`. Each file has its original, `file`, and, when it could be converted, its text, `text`, of `bytes` in size; a spreadsheet has `sheets` instead, each with its `sheet` name, `text` and `bytes`.
-- `<dir>/curation.txt`: the publication note. Its first word is the state: `CURATED`, or `SELECTED` when a relevant file could not be had. The rest explains the curator's choices for the publication: the pairs not kept and why, the files downloaded or not.
-- `<dir>/descriptions.jsonl`: one description per line. `method` is the PSI-MI ID of the method that detected the binding. `accession1` is the human interactor, always its whole protein. `accession2` is the viral interactor, a mature protein when it has `start2` and `stop2`, its coordinates on that entry. `name2` is the viral protein's generic name. `mappings1` and `mappings2` are the sequences of the human and of the viral side that the experiment shows are enough for the binding, their extra end residues (a tag, a linker) in lowercase. `note` explains the curator's choices for that description.
+## Your role
 
-Read the article's text and the note whole, whatever their size, then the descriptions. Read any other file only where a description or the note points to it, or where the article shows something the descriptions may have missed. Over 50 kB, the descriptions and any other file are never read whole: take what you need with `grep`. Read a figure, an image or a PDF page only when you need what it shows.
+The review is worth what the reviewers do: making them work well is your job. Read each reply critically. When one is suspicious (a part of the review skipped, a finding without its place in the publication, `nothing wrong` on a publication whose note names experiments it does not cover, a reply that misreads its task, a tool error), resume that reviewer (SendMessage) with a message that makes its task precise: what to look at again, and how. A finding stays its reviewer's: you check it, never replace the review by your own.
 
-## Lookups
+## Review
 
-The descriptions hold IDs: look up what they name, in a few grouped calls.
+1. **Review**: one `reviewer` agent per publication, a few at a time, each started at xhigh effort, unless the user's message names another effort for this review, sent only `dir: <batch>/<pmid>`, `pmid: <pmid>`. It replies `<pmid>: nothing wrong`, or one line per wrong thing, those left out first: the pair or the fragment left out, or the description, then what is wrong, why, and where in the publication. Without a reply, run it once more; still without one, the publication is not reviewed.
 
-- `uv run ./database/scripts/read.py search <accession>...`, once, with every accession of the descriptions: one line per entry, `SP` (Swiss-Prot) or `TR` (TrEMBL), its gene name, protein name, taxon and length.
-- `uv run ./database/scripts/read.py entry <accession>...`, only for a viral interactor with `start2` and `stop2`: the entry's chains, to see which mature protein the coordinates name.
-- `uv run ./database/scripts/read.py sql "select psimi_id, name from methods where psimi_id in ('MI:0007', 'MI:0018')"`, with every method of the descriptions: their names.
+2. **Check**: each wrong thing a reviewer reports, at the place in the publication it names, and at the place the curation's choice rests on, as the publication note or the description's note names it: true only when the publication proves the curation wrong, false otherwise. An ambiguous case is not wrong: where the publication supports the curation as well as the reviewer (its sources disagree, or it can be read either way), the curator has settled it, and the finding is false.
 
-No other command, no web search, no download.
+3. **Reply**: the publications reviewed and how many have nothing wrong; each wrong thing found true, with its publication, what it is about (the pair or the fragment left out, or the description), why and where; each found false, in one line with why; the publications not reviewed; the reviewers resumed, with why; from the agents' replies, the tool errors.
 
-## What is wrong
+## Fixes
 
-The curator followed five principles:
+Only those the user asks for, as the user directs. A fix first corrects the publication's files in `<batch>/<pmid>/`: `descriptions.jsonl` stays its whole curation, as it should have been. What follows depends on whether the publication is committed.
 
-1. Two proteins are considered to interact whenever an experiment detects an affinity between them.
-2. The results are taken as the authors present them.
-3. Each protein the experiment tested is assigned the UniProt entry that best represents it.
-4. The sequences the experiment used are aligned as mappings on the assigned entry.
-5. What the publication shows that the descriptions cannot hold is written in the notes.
+**Not committed**: the corrected files are the curation. `curation.txt` and the description notes explain the corrected choices, as a curator's would. Then, as for the batch's curation:
 
-Under them, two parts. Do the first part before the second, and give each its own pass.
+1. **Merge**: `cat <batch>/*/descriptions.jsonl > <batch>/descriptions.jsonl`, then `uv run ./curation/scripts/notes.py <batch>`, which writes `<batch>/publications.jsonl` from the publications' `curation.txt`.
+2. **Dry run**: `uv run ./database/scripts/batch.py <batch>` applies and checks everything in one transaction, then rolls it back; report its refused rows and errors as they are.
+3. **Commit**, only when the user asks for it: `uv run ./database/scripts/batch.py <batch> --author "$(cat <batch>/author.txt)" --commit`.
 
-### What the curation leaves out
+**Committed**: Drakkar keeps every note it holds. A write adds a new version to a revised description and a new note on top of the publication's notes, dated by the write: so each fix writes only its own log (what it changes, why, where in the publication), never the whole note rewritten with the correction.
 
-From the publication, not from the curation. Go through the article, figure by figure and table by table, and take every experiment that detects an affinity between a human and a viral protein: the pairs it binds, and the fragments of either protein that kept the binding. The supplementary figures and tables the article cites for such an experiment count, and so does an experiment the article mentions only in a sentence. Then, for each, look in the descriptions and in the notes. What is wrong:
+1. **Diff**: `uv run ./database/scripts/diff.py <pmid> <batch>/<pmid>/descriptions.jsonl` writes beside it what the corrected curation changes in Drakkar: `descriptions.add.jsonl`, the new descriptions, with their curation notes; `descriptions.revise.jsonl`, the revisions, each with its note, which you replace by its log, `FIXED: <summary>` then `- ` detail lines, the version before keeping the curation's note; `descriptions.delete.jsonl`, the removals, each with the note `REMOVED: not found by the curation`, whose reason you replace by the fix's.
+2. **Log**: the publication's log, its first word the state, then what the fix changes and why, on top of `<batch>/<pmid>/curation.txt`, followed by a line `---`, so that the note there reads as Drakkar's.
+3. **Merge**: `cat` the fixed publications' three diff files into `<batch>/descriptions.add.jsonl`, `<batch>/descriptions.revise.jsonl` and `<batch>/descriptions.delete.jsonl`, the first read in place of `<batch>/descriptions.jsonl`, and write `<batch>/publications.jsonl` with one line per fixed publication, its log only: `{"pmid": <pmid>, "state": "curated", "note": "CURATED\n…"}`, `selected` for a `SELECTED` log.
+4. **Dry run**: `uv run ./database/scripts/batch.py <batch>`; report its refused rows and errors as they are.
+5. **Commit**, only when the user asks for it: `uv run ./database/scripts/batch.py <batch> --commit`, with no author: the author of a curation is its original one, which its first note names.
 
-- A pair the publication shows bound has no description, and no word in the note saying why it was not kept.
-- A fragment of a protein shown to keep the binding (a truncation, a deletion construct, a peptide) is in no mapping of its description, and in no word of the notes.
-
-A reason the notes give is enough, unless the publication contradicts it. Name what is left out and where the publication shows it; do not look up its entry, its method or its coordinates, and do not write the description it would need.
-
-### What the descriptions record
-
-Each description against the experiment it names. What is wrong:
-
-- The publication does not show the pair bound by an experiment: only a colocalization, a functional effect, a prediction, or a citation of another publication.
-- The method cannot detect a physical binding, or is not the assay that showed this pair.
-- The authors present the pair as not binding, or below their own threshold.
-- The human entry is another gene than the protein tested, is not human (mouse cells, a mouse library), or is not Swiss-Prot.
-- The human or the viral protein tested is not wild type: a residue changed anywhere in its sequence, whatever the purpose.
-- The human protein is an HLA protein (any `HLA-` gene): HLA proteins are not curated.
-- The viral entry is not the protein tested, or is a protein of another virus. Another strain of the same virus is not wrong when UniProt lacks the publication's strain and the note says so.
-- The viral interactor is the whole protein where the experiment tested a mature protein cleaved from it, or the reverse.
-- A mapping comes from a construct that lost the binding, or is a region the authors conclude rather than test.
-- A mapping is on the wrong side: the human sequences in `mappings1`, the viral ones in `mappings2`.
-- The state is `CURATED` while a file the curation needed is missing.
-
-## What is not wrong
-
-- A choice the notes explain, unless the publication contradicts the explanation.
-- One of several defensible values: a close PSI-MI term, an entry among close strains, the source a value was taken from.
-- A weak binding, or a binding shown in an experiment designed to test something else (the condition without the inhibitor in an inhibition assay).
-- A tag, a truncation or a natural modification (a phosphorylation, a glycosylation) of a protein: it is still the same wild-type protein.
-- What the database checks when the descriptions are written: formats, coordinates within the protein, duplicates, the consistency of the generic names, the alignment of the mappings.
-- The wording of the notes.
-
-## Reply
-
-Reply in one line, `<pmid>: nothing wrong`, or with one line per wrong thing, those left out first: `<pmid>: <the pair or the fragment left out, by its proteins as the article names them, or the description, by its accessions and method> — <what is wrong> — <why> — <where in the publication: figure, table, section>`. After that, each error of a `./database/scripts/read.py` command, if any, with its command and output.
+After a fix, reply what each fixed publication's files now change, whether the dry run passes, else its refused rows and errors, and after a commit, its report. Never ask for the commit; when the user asks for it, commit without asking again.
