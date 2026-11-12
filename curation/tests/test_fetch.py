@@ -3,14 +3,17 @@ network). The pages in `samples/fetch/` are real responses cut to what the route
 
 import dataclasses
 import email.message
+import gzip
 import io
 import json
+import tarfile
 import zipfile
 from pathlib import Path
 from typing import Any, cast
 
 import docx
 import openpyxl
+import py7zr
 import pymupdf
 import pytest
 
@@ -28,6 +31,7 @@ from curation.fetch import (
     http_get,
     pmcids,
     report_lines,
+    unpacked,
 )
 
 SAMPLES = Path(__file__).parent / "samples" / "fetch"
@@ -208,6 +212,70 @@ def test_supplement_archive_is_unpacked(tmp_path: Path):
     assert [s["file"] for s in report["supplements"]] == [f"{PMID}.supp/s1.xlsx"]
     assert (tmp_path / f"{PMID}.supp" / "s1.xlsx").read_text() == "cells"
     assert report["missing_supplements"] == []
+
+
+def _tar(mode: str) -> bytes:
+    body = io.BytesIO()
+    with tarfile.open(fileobj=body, mode=mode) as archive:
+        for path, content in [("data/s1.csv", b"a,b\n"), ("movie_s2.mp4", b"frames")]:
+            info = tarfile.TarInfo(path)
+            info.size = len(content)
+            archive.addfile(info, io.BytesIO(content))
+    return body.getvalue()
+
+
+def _7z() -> bytes:
+    body = io.BytesIO()
+    with py7zr.SevenZipFile(body, "w") as archive:
+        archive.writestr(b"a,b\n", "data/s1.csv")
+        archive.writestr(b"frames", "movie_s2.mp4")
+    return body.getvalue()
+
+
+@pytest.mark.parametrize(
+    ("name", "body"),
+    [
+        ("s.tar", _tar("w")),
+        ("s.tar.gz", _tar("w:gz")),
+        ("s.tgz", _tar("w:gz")),
+        ("s.tar.bz2", _tar("w:bz2")),
+        ("s.tar.xz", _tar("w:xz")),
+        ("s.7z", _7z()),
+    ],
+    ids=lambda x: x if isinstance(x, str) else "",
+)
+def test_every_archive_is_unpacked_alike(name: str, body: bytes):
+    """Every kind of archive as a zip: each file under its URL in the archive, a video left out."""
+    assert list(unpacked(name, body, "https://journal.org/s")) == [
+        ("s1.csv", "https://journal.org/s#data/s1.csv", b"a,b\n")
+    ]
+
+
+def test_rar_archive_is_unpacked():
+    rar = (SAMPLES / "archive.rar").read_bytes()  # from unrar2-cffi's tests
+    assert list(unpacked("s.rar", rar, "u")) == [
+        ("test_file.txt", "u#test_file.txt", b"This is for test."),
+        ("test_file2.txt", "u#test_file2.txt", b"This is another test!\n"),
+        ("testfile", "u#testdir/testfile", b""),
+    ]
+
+
+def test_gzip_file_is_unpacked():
+    """A `.gz` that is no tar: its one file, named without `.gz`."""
+    assert list(unpacked("s1.csv.gz", gzip.compress(b"a,b\n"), "u")) == [
+        ("s1.csv", "u#s1.csv", b"a,b\n")
+    ]
+
+
+@pytest.mark.parametrize("name", ["s.zip", "s.rar", "s.7z", "s.tar", "s.tgz", "s.gz"])
+def test_archive_that_cannot_be_read_is_kept(name: str):
+    assert list(unpacked(name, b"not an archive", "u")) == [(name, "u", b"not an archive")]
+
+
+def test_archive_holding_no_file_is_kept():
+    empty = io.BytesIO()
+    zipfile.ZipFile(empty, "w").close()
+    assert list(unpacked("s.zip", empty.getvalue(), "u")) == [("s.zip", "u", empty.getvalue())]
 
 
 def test_document_images_are_saved_beside_it(tmp_path: Path):

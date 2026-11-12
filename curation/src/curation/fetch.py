@@ -50,23 +50,34 @@ Configuration, in the project's `.env`: `UNPAYWALL_EMAIL`, the address Unpaywall
 answer a request. Without it Unpaywall is not asked at all.
 """
 
+import gzip
 import io
+import itertools
 import json
+import lzma
 import mimetypes
 import os
 import re
+import sys
+import tarfile
+import tempfile
 import urllib.error
 import urllib.request
 import zipfile
+import zlib
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol, cast
 from urllib.parse import quote, unquote, urljoin, urlparse
 
+import py7zr
 from dotenv import load_dotenv
 from lxml import etree
 from lxml.etree import _Element  # pyright: ignore[reportPrivateUsage]
+from py7zr.io import BytesIOFactory
+from unrar.cffi import rarfile  # pyright: ignore[reportMissingTypeStubs]
+from unrar.cffi.unrarlib import BadRarFile  # pyright: ignore[reportMissingTypeStubs]
 
 from curation.parse import (
     IMAGES,
@@ -105,6 +116,13 @@ SUPPLEMENT_SUFFIXES = {
     ".ppt",
     ".pdf",
     ".zip",
+    ".rar",
+    ".7z",
+    ".tar",
+    ".tgz",
+    ".gz",
+    ".bz2",
+    ".xz",
 }
 # Preprints are not peer-reviewed publications: their copies are never fetched.
 PREPRINT_HOSTS = (
@@ -260,19 +278,92 @@ def _typed(name: str, content_type: str) -> str:
     return name
 
 
+Files = Iterator[tuple[str, bytes]]
+
+
+def _zip_files(name: str, body: bytes) -> Files:
+    with zipfile.ZipFile(io.BytesIO(body)) as archive:
+        for info in archive.infolist():
+            if not info.is_dir():
+                yield info.filename, archive.read(info)
+
+
+def _rar_files(name: str, body: bytes) -> Files:
+    # The unrar library reads an archive from a file only.
+    with tempfile.NamedTemporaryFile(suffix=".rar") as file:
+        file.write(body)
+        file.flush()
+        archive = rarfile.RarFile(Path(file.name))
+        for info in archive.infolist():
+            if not info.is_dir():
+                yield info.filename, archive.read(info)
+
+
+def _7z_files(name: str, body: bytes) -> Files:
+    files = BytesIOFactory(sys.maxsize)  # a file over its limit would be cut short
+    with py7zr.SevenZipFile(io.BytesIO(body)) as archive:
+        archive.extractall(factory=files)
+    for path, file in files.products.items():
+        file.seek(0)
+        yield path, file.read()
+
+
+def _tar_files(name: str, body: bytes) -> Files:
+    """A tar archive's files, the archive compressed or not (gzip, bzip2, xz); a `.gz` that is
+    no tar, its one compressed file, named without `.gz`."""
+    if name.lower().endswith(".gz") and not tarfile.is_tarfile(io.BytesIO(body)):
+        yield Path(name).stem, gzip.decompress(body)
+        return
+    with tarfile.open(fileobj=io.BytesIO(body)) as archive:
+        for member in archive:
+            if member.isfile() and (file := archive.extractfile(member)):
+                yield member.name, file.read()
+
+
+# The archives, by the end of their name, each with the reader of its files.
+ARCHIVES: dict[str, Callable[[str, bytes], Files]] = {
+    ".zip": _zip_files,
+    ".rar": _rar_files,
+    ".7z": _7z_files,
+    ".tar": _tar_files,
+    ".tgz": _tar_files,
+    ".gz": _tar_files,
+    ".tar.bz2": _tar_files,
+    ".tar.xz": _tar_files,
+}
+# What a reader raises on a file that is no archive, or a damaged one.
+ARCHIVE_ERRORS = (
+    zipfile.BadZipFile,
+    rarfile.RarFileError,
+    BadRarFile,
+    py7zr.Bad7zFile,
+    tarfile.TarError,
+    gzip.BadGzipFile,
+    lzma.LZMAError,
+    zlib.error,
+    EOFError,
+)
+
+
 def unpacked(name: str, body: bytes, url: str) -> Iterator[tuple[str, str, bytes]]:
-    """A downloaded file, or each file of a zip archive but its videos: its name, its URL
-    (`<url>#<path>` for a file of an archive) and its body."""
-    archive = _zip(body) if name.lower().endswith(".zip") else None
-    if archive is None:
+    """A downloaded file, or each file of an archive (`ARCHIVES`: zip, RAR, 7z, tar, gzip) but
+    its videos: its name, its URL (`<url>#<path>` for a file of an archive) and its body. An
+    archive that cannot be read, or holds no file, is a file as it is."""
+    reader = next((r for end, r in ARCHIVES.items() if name.lower().endswith(end)), None)
+    files = reader(name, body) if reader else iter(())
+    try:
+        first = next(files, None)
+    except ARCHIVE_ERRORS:
+        first = None
+    if first is None:
         yield name, url, body
         return
-    for info in archive.infolist():
-        member = Path(info.filename)
-        if info.is_dir() or "__MACOSX" in member.parts or member.name[:1] == ".":
+    for path, content in itertools.chain([first], files):
+        member = Path(path)
+        if "__MACOSX" in member.parts or member.name[:1] == ".":
             continue
         if not _left_out(member.name):
-            yield from unpacked(member.name, archive.read(info), f"{url}#{info.filename}")
+            yield from unpacked(member.name, content, f"{url}#{path}")
 
 
 def _same_file(name: str, url: str, text: str = "") -> bool:
@@ -778,7 +869,7 @@ class Fetch:
         self.report["over_limit"].append({"name": item.name, "url": url, "size": size})
 
     def _keep(self, item: Supplement, name: str, body: bytes, url: str) -> None:
-        """A supplementary file saved, a zip archive unpacked (its videos left out), each file
+        """A supplementary file saved, an archive unpacked (its videos left out), each file
         made ready to read (`prepare`)."""
         for file, where, content in unpacked(name, body, url):
             path = save(self.out / f"{self.pmid}.supp", file, content)
