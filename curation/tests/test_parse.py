@@ -1,16 +1,20 @@
 """The converters of `parse.py`, on small samples of each file type (no network)."""
 
+import gzip
 import io
 import json
 import re
 import subprocess
 import sys
+import tarfile
+import zipfile
 from datetime import datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import docx
 import openpyxl
+import py7zr
 import pymupdf
 import pytest
 import xlwt
@@ -667,3 +671,88 @@ def test_parse_script_prints_the_manifest_entries(tmp_path: Path):
     assert [s["sheet"] for s in entries[2]["sheets"]] == ["Y2H; Caco-2", "Empty"]
     assert entries[3] == {"file": "s3.rtf"}
     assert (tmp_path / "1.xml.html").read_text().startswith("<h1>NS1 binds TRIM25</h1>\n")
+
+
+def _tar(mode: Literal["w", "w:gz", "w:bz2", "w:xz"]) -> bytes:
+    body = io.BytesIO()
+    with tarfile.open(fileobj=body, mode=mode) as archive:
+        for path, content in [("data/s1.csv", b"a,b\n"), ("movie_s2.mp4", b"frames")]:
+            info = tarfile.TarInfo(path)
+            info.size = len(content)
+            archive.addfile(info, io.BytesIO(content))
+    return body.getvalue()
+
+
+def _7z() -> bytes:
+    body = io.BytesIO()
+    with py7zr.SevenZipFile(body, "w") as archive:
+        archive.writestr(b"a,b\n", "data/s1.csv")
+        archive.writestr(b"frames", "movie_s2.mp4")
+    return body.getvalue()
+
+
+def _zip(files: dict[str, bytes]) -> bytes:
+    body = io.BytesIO()
+    with zipfile.ZipFile(body, "w") as archive:
+        for path, content in files.items():
+            archive.writestr(path, content)
+    return body.getvalue()
+
+
+@pytest.mark.parametrize(
+    ("name", "body"),
+    [
+        ("s.zip", _zip({"data/s1.csv": b"a,b\n", "movie_s2.mp4": b"frames"})),
+        ("s.tar", _tar("w")),
+        ("s.tar.gz", _tar("w:gz")),
+        ("s.tgz", _tar("w:gz")),
+        ("s.tar.bz2", _tar("w:bz2")),
+        ("s.tar.xz", _tar("w:xz")),
+        ("s.7z", _7z()),
+    ],
+    ids=lambda x: x if isinstance(x, str) else "",
+)
+def test_every_archive_is_replaced_by_its_files(tmp_path: Path, name: str, body: bytes):
+    """Every kind of archive alike: replaced by its files, saved beside it, a video left out."""
+    (tmp_path / "supp").mkdir()
+    (tmp_path / "supp" / name).write_bytes(body)
+    assert prepare(tmp_path, f"supp/{name}") == ["supp/s1.csv"]
+    assert sorted(p.name for p in (tmp_path / "supp").iterdir()) == ["s1.csv"]
+    assert (tmp_path / "supp" / "s1.csv").read_bytes() == b"a,b\n"
+
+
+def test_rar_archive_is_replaced_by_its_files(tmp_path: Path):
+    (tmp_path / "s.rar").write_bytes((SAMPLES / "archive.rar").read_bytes())  # unrar2-cffi's
+    assert prepare(tmp_path, "s.rar") == ["test_file.txt", "test_file2.txt", "testfile"]
+    assert (tmp_path / "test_file2.txt").read_text() == "This is another test!\n"
+    assert not (tmp_path / "s.rar").exists()
+
+
+def test_gzip_file_is_replaced_by_its_file(tmp_path: Path):
+    """A `.gz` that is no tar: its one file, named without `.gz`."""
+    (tmp_path / "s1.csv.gz").write_bytes(gzip.compress(b"a,b\n"))
+    assert prepare(tmp_path, "s1.csv.gz") == ["s1.csv"]
+    assert (tmp_path / "s1.csv").read_bytes() == b"a,b\n"
+
+
+def test_archive_in_an_archive_is_unpacked_and_its_files_made_ready(tmp_path: Path):
+    """Hidden files and `__MACOSX` left out; an archive inside unpacked; a TIFF made a PNG."""
+    tiff = (SAMPLES / "fetch" / "cmyk.tif").read_bytes()
+    inner = _zip({"fig_s1.tif": tiff, ".DS_Store": b"junk"})
+    (tmp_path / "s.zip").write_bytes(
+        _zip({"inner.zip": inner, "__MACOSX/._inner.zip": b"junk", "s2.txt": b"text"})
+    )
+    assert prepare(tmp_path, "s.zip") == ["fig_s1.png", "s2.txt"]
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["fig_s1.png", "s2.txt"]
+
+
+@pytest.mark.parametrize("name", ["s.zip", "s.rar", "s.7z", "s.tar", "s.tgz", "s.gz"])
+def test_archive_that_cannot_be_read_is_kept(tmp_path: Path, name: str):
+    (tmp_path / name).write_bytes(b"not an archive")
+    assert prepare(tmp_path, name) == [name]
+    assert (tmp_path / name).read_bytes() == b"not an archive"
+
+
+def test_archive_holding_no_file_is_kept(tmp_path: Path):
+    (tmp_path / "s.zip").write_bytes(_zip({}))
+    assert prepare(tmp_path, "s.zip") == ["s.zip"]

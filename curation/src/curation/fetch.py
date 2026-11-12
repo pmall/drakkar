@@ -21,63 +21,49 @@ answering yes or no by one test.
    PMC page, or else the supplementary links of the publisher's page. Each is looked for on every
    route that serves one, whatever route gave the article: the PMC open access files, the link
    the article gives (never the PMC website's, which is behind a challenge), the publisher's page,
-   then Europe PMC's supplementary files service. Archives are unpacked. A video, the Reporting
-   Summary and the peer review file (both by their caption) are skipped. A file over 100 MB is
-   never downloaded, by the size the server announces or once its download passes 100 MB, nor
-   read from Europe PMC's archive: it is left to a download by hand (`download`), when
-   judged needed.
+   then Europe PMC's supplementary files service. A video, the Reporting Summary and the peer
+   review file (both by their caption) are skipped. A file over 100 MB is never downloaded, by
+   the size the server announces or once its download passes 100 MB, nor read from Europe PMC's
+   archive: it is left to a download by hand (`download`), when judged needed.
 
 It writes the article, `<pmid>.xml`, `<pmid>.html` or `<pmid>.pdf`, the supplementary files in
 `<pmid>.supp/`, and the article's figures, the other images of the PMC open access files, in
 `<pmid>.fig/`. Then the parser (`parse.py`) makes each file ready to read (`prepare`) and
-converts it as `parse.py` does: a TIFF or a BMP image replaced by its PNG, one file per
-image it holds (`<name>-<n>.png` when several), which the Read tool reads; a Word document, a
-workbook or a presentation (`.docx`, `.xlsx`, `.xlsm`, `.pptx`) kept, with each image it holds
-(its `media` folder, its videos left out) saved beside it, `<file>.<image>`; each file but an
-image converted, its texts beside it; an image read as it is.
+converts it, as `parse.py` describes: an archive replaced by its files, a TIFF or a BMP image by
+its PNG, a document's images saved beside it, each file but an image converted, its texts beside
+it.
 
 Last, when the article was downloaded, the manifest `manifest.json`, every file downloaded:
 `article`, with `file`, the original, `text`, its text, and `bytes`, the size of the text;
-`supplements`, each with the `name` the article gives it (the images of an archive or a document
-under its name), `file`, then `text` and `bytes`, or for a spreadsheet `sheets`, each with `sheet`,
-its name, `text` and `bytes`; `figures`, the paths of the figures. An image, or a file that could
-not be converted, has its `file` alone. Paths are relative to `<dir>`. A publication directory set
-up from files the user provides holds the same: each file converted with
-`curation/scripts/parse.py`, which prints its entries, and the manifest in this format, `bytes`
-optional.
+`supplements`, each with the `name` the article gives it (the files of an archive and the images
+of a document under its name), `file`, then `text` and `bytes`, or for a spreadsheet `sheets`,
+each with `sheet`, its name, `text` and `bytes`; `figures`, the paths of the figures. An image, or
+a file that could not be converted, has its `file` alone. Paths are relative to `<dir>`. A
+publication directory set up from files the user provides holds the same: each file converted
+with `curation/scripts/parse.py`, which prints its entries, and the manifest in this format,
+`bytes` optional.
 
 Configuration, in the project's `.env`: `UNPAYWALL_EMAIL`, the address Unpaywall asks for to
 answer a request. Without it Unpaywall is not asked at all.
 """
 
-import gzip
 import io
-import itertools
 import json
-import lzma
 import mimetypes
 import os
 import re
-import sys
-import tarfile
-import tempfile
 import urllib.error
 import urllib.request
 import zipfile
-import zlib
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol, cast
 from urllib.parse import quote, unquote, urljoin, urlparse
 
-import py7zr
 from dotenv import load_dotenv
 from lxml import etree
 from lxml.etree import _Element  # pyright: ignore[reportPrivateUsage]
-from py7zr.io import BytesIOFactory
-from unrar.cffi import rarfile  # pyright: ignore[reportMissingTypeStubs]
-from unrar.cffi.unrarlib import BadRarFile  # pyright: ignore[reportMissingTypeStubs]
 
 from curation.parse import (
     IMAGES,
@@ -276,94 +262,6 @@ def _typed(name: str, content_type: str) -> str:
     if Path(name).suffix.lower() not in SUPPLEMENT_SUFFIXES | IMAGES:
         name += mimetypes.guess_extension(content_type) or ""
     return name
-
-
-Files = Iterator[tuple[str, bytes]]
-
-
-def _zip_files(name: str, body: bytes) -> Files:
-    with zipfile.ZipFile(io.BytesIO(body)) as archive:
-        for info in archive.infolist():
-            if not info.is_dir():
-                yield info.filename, archive.read(info)
-
-
-def _rar_files(name: str, body: bytes) -> Files:
-    # The unrar library reads an archive from a file only.
-    with tempfile.NamedTemporaryFile(suffix=".rar") as file:
-        file.write(body)
-        file.flush()
-        archive = rarfile.RarFile(Path(file.name))
-        for info in archive.infolist():
-            if not info.is_dir():
-                yield info.filename, archive.read(info)
-
-
-def _7z_files(name: str, body: bytes) -> Files:
-    files = BytesIOFactory(sys.maxsize)  # a file over its limit would be cut short
-    with py7zr.SevenZipFile(io.BytesIO(body)) as archive:
-        archive.extractall(factory=files)
-    for path, file in files.products.items():
-        file.seek(0)
-        yield path, file.read()
-
-
-def _tar_files(name: str, body: bytes) -> Files:
-    """A tar archive's files, the archive compressed or not (gzip, bzip2, xz); a `.gz` that is
-    no tar, its one compressed file, named without `.gz`."""
-    if name.lower().endswith(".gz") and not tarfile.is_tarfile(io.BytesIO(body)):
-        yield Path(name).stem, gzip.decompress(body)
-        return
-    with tarfile.open(fileobj=io.BytesIO(body)) as archive:
-        for member in archive:
-            if member.isfile() and (file := archive.extractfile(member)):
-                yield member.name, file.read()
-
-
-# The archives, by the end of their name, each with the reader of its files.
-ARCHIVES: dict[str, Callable[[str, bytes], Files]] = {
-    ".zip": _zip_files,
-    ".rar": _rar_files,
-    ".7z": _7z_files,
-    ".tar": _tar_files,
-    ".tgz": _tar_files,
-    ".gz": _tar_files,
-    ".tar.bz2": _tar_files,
-    ".tar.xz": _tar_files,
-}
-# What a reader raises on a file that is no archive, or a damaged one.
-ARCHIVE_ERRORS = (
-    zipfile.BadZipFile,
-    rarfile.RarFileError,
-    BadRarFile,
-    py7zr.Bad7zFile,
-    tarfile.TarError,
-    gzip.BadGzipFile,
-    lzma.LZMAError,
-    zlib.error,
-    EOFError,
-)
-
-
-def unpacked(name: str, body: bytes, url: str) -> Iterator[tuple[str, str, bytes]]:
-    """A downloaded file, or each file of an archive (`ARCHIVES`: zip, RAR, 7z, tar, gzip) but
-    its videos: its name, its URL (`<url>#<path>` for a file of an archive) and its body. An
-    archive that cannot be read, or holds no file, is a file as it is."""
-    reader = next((r for end, r in ARCHIVES.items() if name.lower().endswith(end)), None)
-    files = reader(name, body) if reader else iter(())
-    try:
-        first = next(files, None)
-    except ARCHIVE_ERRORS:
-        first = None
-    if first is None:
-        yield name, url, body
-        return
-    for path, content in itertools.chain([first], files):
-        member = Path(path)
-        if "__MACOSX" in member.parts or member.name[:1] == ".":
-            continue
-        if not _left_out(member.name):
-            yield from unpacked(member.name, content, f"{url}#{path}")
 
 
 def _same_file(name: str, url: str, text: str = "") -> bool:
@@ -869,14 +767,13 @@ class Fetch:
         self.report["over_limit"].append({"name": item.name, "url": url, "size": size})
 
     def _keep(self, item: Supplement, name: str, body: bytes, url: str) -> None:
-        """A supplementary file saved, an archive unpacked (its videos left out), each file
-        made ready to read (`prepare`)."""
-        for file, where, content in unpacked(name, body, url):
-            path = save(self.out / f"{self.pmid}.supp", file, content)
-            for ready in prepare(self.out, str(path.relative_to(self.out))):
-                self.report.setdefault("supplements", []).append(
-                    {"name": item.name, "file": ready, "url": where}
-                )
+        """A supplementary file saved and made ready to read (`prepare`): each file it gives
+        listed under its name."""
+        path = save(self.out / f"{self.pmid}.supp", name, body)
+        for ready in prepare(self.out, str(path.relative_to(self.out))):
+            self.report.setdefault("supplements", []).append(
+                {"name": item.name, "file": ready, "url": url}
+            )
 
     def figures(self) -> None:
         """The article's figures: the images of the PMC open access files that are no
@@ -885,9 +782,8 @@ class Fetch:
         taken = {x["url"] for x in self.report["supplements"] + self.report["over_limit"]}
         for name, url in self.oa_files.items():
             if is_image(Path(name)) and url not in taken and (r := self.get(url)).status == 200:
-                for file, _, content in unpacked(name, r.body, url):
-                    path = save(self.out / f"{self.pmid}.fig", file, content)
-                    figures += prepare(self.out, str(path.relative_to(self.out)))
+                path = save(self.out / f"{self.pmid}.fig", name, r.body)
+                figures += prepare(self.out, str(path.relative_to(self.out)))
         self.report["figures"] = figures
 
     # The report
@@ -1019,18 +915,17 @@ def report_lines(report: dict[str, Any]) -> list[str]:
 
 
 def download(out: Path, url: str, get: Get = http_get) -> list[str]:
-    """The file at a URL saved in `out`, an archive unpacked, each file made ready to read and
-    converted (`entries`); returns one line per file: its entry, as in the manifest (paths
-    starting with `out`), or why it could not be had or converted."""
+    """The file at a URL saved in `out`, made ready to read and converted (`entries`); returns
+    one line per file: its entry, as in the manifest (paths starting with `out`), or why it could
+    not be had or converted."""
     r = get(url)
     if r.status != 200:
         return [_outcome(r)]
     name = _typed(_url_name(r.url or url) or "file", r.content_type)
     lines: list[str] = []
-    for file, _, content in unpacked(name, r.body, r.url or url):
-        for found in entries(Path(), str(save(out, file, content))):
-            if why := found.pop("not_converted", None):
-                lines.append(f"{found['file']}: not converted, {why}")
-            else:
-                lines.append(json.dumps(found, ensure_ascii=False))
+    for found in entries(Path(), str(save(out, name, r.body))):
+        if why := found.pop("not_converted", None):
+            lines.append(f"{found['file']}: not converted, {why}")
+        else:
+            lines.append(json.dumps(found, ensure_ascii=False))
     return lines

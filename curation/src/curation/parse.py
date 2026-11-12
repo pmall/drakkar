@@ -32,16 +32,22 @@ network.
   one, among comma, semicolon and tab, that gives the most rows the same number of fields); a file
   whose encoding is not found is refused.
 
-Each file is first made ready to read (`prepare`): a TIFF or a BMP image replaced by its PNG,
-a document's images saved beside it.
+Each file is first made ready to read (`prepare`): an archive (zip, RAR, 7z, tar, gzip) replaced
+by its files, saved beside it (its videos left out, an archive in it unpacked), a TIFF or a BMP
+image replaced by its PNG, a document's images saved beside it.
 """
 
 import bisect
 import csv
+import gzip
 import io
+import lzma
 import re
 import struct
+import sys
+import tarfile
 import zipfile
+import zlib
 from collections import Counter
 from collections.abc import Callable, Collection, Iterable, Iterator
 from dataclasses import dataclass
@@ -52,11 +58,15 @@ from typing import Any, Literal, cast
 import charset_normalizer
 import olefile
 import openpyxl
+import py7zr
 import pymupdf
 import trafilatura
 import xlrd
 from lxml import etree
 from lxml.etree import _Element  # pyright: ignore[reportPrivateUsage]
+from py7zr.io import BytesIOFactory
+from unrar.cffi import rarfile  # pyright: ignore[reportMissingTypeStubs]
+from unrar.cffi.unrarlib import BadRarFile  # pyright: ignore[reportMissingTypeStubs]
 
 
 class ParseError(Exception):
@@ -1267,14 +1277,109 @@ def as_png(name: str, body: bytes) -> list[tuple[str, bytes]]:
     return [(f"{stem}.png", image) for image in images]
 
 
+Files = Iterator[tuple[str, bytes]]
+
+
+def _zip_files(path: Path) -> Files:
+    with zipfile.ZipFile(path) as archive:
+        for info in archive.infolist():
+            if not info.is_dir():
+                yield info.filename, archive.read(info)
+
+
+def _rar_files(path: Path) -> Files:
+    archive = rarfile.RarFile(path)
+    for info in archive.infolist():
+        if not info.is_dir():
+            yield info.filename, archive.read(info)
+
+
+def _7z_files(path: Path) -> Files:
+    files = BytesIOFactory(sys.maxsize)  # a file over its limit would be cut short
+    with py7zr.SevenZipFile(path) as archive:
+        archive.extractall(factory=files)
+    for name, file in files.products.items():
+        file.seek(0)
+        yield name, file.read()
+
+
+def _tar_files(path: Path) -> Files:
+    """A tar archive's files, the archive compressed or not (gzip, bzip2, xz); a `.gz` that is
+    no tar, its one compressed file, named without `.gz`."""
+    if path.name.lower().endswith(".gz") and not tarfile.is_tarfile(path):
+        yield path.stem, gzip.decompress(path.read_bytes())
+        return
+    with tarfile.open(path) as archive:
+        for member in archive:
+            if member.isfile() and (file := archive.extractfile(member)):
+                yield member.name, file.read()
+
+
+# The archives, by the end of their name, each with the reader of its files.
+ARCHIVES: dict[str, Callable[[Path], Files]] = {
+    ".zip": _zip_files,
+    ".rar": _rar_files,
+    ".7z": _7z_files,
+    ".tar": _tar_files,
+    ".tgz": _tar_files,
+    ".gz": _tar_files,
+    ".tar.bz2": _tar_files,
+    ".tar.xz": _tar_files,
+}
+# What a reader raises on a file that is no archive, or a damaged one.
+ARCHIVE_ERRORS = (
+    zipfile.BadZipFile,
+    rarfile.RarFileError,
+    BadRarFile,
+    py7zr.Bad7zFile,
+    tarfile.TarError,
+    gzip.BadGzipFile,
+    lzma.LZMAError,
+    zlib.error,
+    EOFError,
+)
+
+
+def archive_files(path: Path) -> list[tuple[str, bytes]] | None:
+    """The files of an archive (`ARCHIVES`, by the end of its name: zip, RAR, 7z, tar, gzip),
+    each its name, without its folder, and its body; folders, `__MACOSX` and hidden files left
+    out, and videos. None when the file is no archive, or one that cannot be read or holds no
+    file."""
+    reader = next((r for end, r in ARCHIVES.items() if path.name.lower().endswith(end)), None)
+    if reader is None:
+        return None
+    try:
+        files = list(reader(path))
+    except ARCHIVE_ERRORS:
+        return None
+    if not files:
+        return None
+    kept: list[tuple[str, bytes]] = []
+    for name, body in files:
+        member = Path(name)
+        hidden = "__MACOSX" in member.parts or member.name[:1] == "."
+        if not hidden and not is_video(member.name):
+            kept.append((member.name, body))
+    return kept
+
+
 def prepare(base: Path, file: str) -> list[str]:
-    """A downloaded file, at a path relative to `base`, made ready to read: a TIFF or a BMP image
-    replaced by its PNG (`as_png`), kept as it is when it cannot be opened; a document that is a
-    zip archive (`DOCUMENT_MEDIA`) kept, each image it holds but its videos saved beside it,
+    """A downloaded file, at a path relative to `base`, made ready to read: an archive replaced
+    by its files (`archive_files`), saved beside it and each made ready likewise (an archive in
+    an archive unpacked), kept as it is when it cannot be read or holds no file; a TIFF or a BMP
+    image replaced by its PNG (`as_png`), kept as it is when it cannot be opened; a document that
+    is a zip archive (`DOCUMENT_MEDIA`) kept, each image it holds but its videos saved beside it,
     `<file>.<image>`, and made ready likewise. Returns the files to list, paths relative to
-    `base`: the file, or its PNG, then a document's images."""
+    `base`: an archive's files, or the file, or its PNG, then a document's images."""
     path = base / file
     suffix = path.suffix.lower()
+    if (files := archive_files(path)) is not None:
+        path.unlink()
+        ready: list[str] = []
+        for name, body in files:
+            saved = save(path.parent, name, body)
+            ready += prepare(base, str(Path(file).with_name(saved.name)))
+        return ready
     if suffix in TO_PNG:
         images = as_png(path.name, path.read_bytes())
         if not images:

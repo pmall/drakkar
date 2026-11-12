@@ -6,13 +6,15 @@ Converts each file, a path relative to `<dir>` (the publication directory), by i
 written beside it and named by their format. No network. The conversions are described in
 `curation/src/curation/parse.py`.
 
-Each file is first made ready to read, as `fetch.py` makes the downloads (`prepare`): a TIFF or a
-BMP image replaced by its PNG, a document's images saved beside it. Prints the entries of the
-manifest (`curation/src/curation/fetch.py`) of each file, then of its images, one JSON line each,
-paths relative to `<dir>`: `file`, then `text` and `bytes`, or `sheets`, each with `sheet`, `text`
-and `bytes`. An image has its `file` alone; so has a file that cannot be converted (a scanned PDF, a
-damaged file, a type with no converter), why on stderr, nothing written for it. A file that does not
-exist is refused. The exit code is 1 when a file is not converted.
+Each file is first made ready to read, as `fetch.py` makes the downloads (`prepare`): an archive
+replaced by its files, saved beside it (its videos left out), a TIFF or a BMP image replaced by its
+PNG, a document's images saved beside it. Prints the entries of the manifest
+(`curation/src/curation/fetch.py`) of each file (an archive's: of each of its files), then of its
+images, one JSON line each, paths relative to `<dir>`: `file`, then `text` and `bytes`, or
+`sheets`, each with `sheet`, `text` and `bytes`. An image has its `file` alone; so has a file that
+cannot be converted (a scanned PDF, a damaged file, a type with no converter), why on stderr,
+nothing written for it. A file that does not exist is refused. The exit code is 1 when a file is
+not converted.
 """
 
 import argparse
