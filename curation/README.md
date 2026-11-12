@@ -8,7 +8,7 @@ The curation of Drakkar by an AI agent. A client of the Drakkar database, it nev
 - [`skills/curate-one/`](skills/curate-one/SKILL.md): the curation of one publication from its full text into its descriptions and its publication note. Its prompt is the whole curation.
 - [`agents/curator.md`](agents/curator.md): the curator agent, which runs the `curate-one` skill on one publication of a batch; its file holds only its settings.
 - [`skills/fetch/`](skills/fetch/SKILL.md): the download of a run's full texts into its pool, and the forming of its next batch from the publications whose download is complete.
-- [`skills/curate/`](skills/curate/SKILL.md): the curation of a batch, each publication by a curator agent, merged into files that pass the dry run and reported; the commit comes when the user asks.
+- [`skills/curate/`](skills/curate/SKILL.md): the curation of a batch, each publication by a curator agent, then reviewed by a reviewer agent and fixed by its curator, merged into files that pass the dry run and reported; the commit comes when the user asks.
 - [`skills/review-one/`](skills/review-one/SKILL.md): the review of one curated publication, a hunt for what is wrong in its descriptions and its note, against its full text.
 - [`agents/reviewer.md`](agents/reviewer.md): the reviewer agent, which runs the `review-one` skill on one publication of a batch; its file holds only its settings.
 - [`skills/review/`](skills/review/SKILL.md): the optional review of a curated batch, each publication by a reviewer agent, what they find checked and reported, then the fixes the user directs.
