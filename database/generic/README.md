@@ -13,8 +13,8 @@ The NCBI species, except where its species groups viruses that publications name
 - SARS-CoV-2 and SARS-CoV (with the bat SARS-like viruses) out of *Betacoronavirus pandemicum*.
 - DENV-1 to DENV-4 out of *Orthoflavivirus denguei*.
 - One per papillomavirus type (HPV16, HPV18, HPV8…), out of *Alphapapillomavirus* and *Betapapillomavirus*. The letter variants (HPV6a, HPV6b, HPV2a, HPV-5b) are listed on their own: NCBI puts them beside their type, not under it, so a list cannot fold them into it.
-- EV-A71, CVA16, CVA10, CVA6, CVB1 to CVB5, poliovirus 1 to 3, CVA17, CVA24 out of *Enterovirus A*, *B* and *C*.
-- TGEV, PRCV, feline and canine coronavirus out of *Alphacoronavirus 1*; HCoV-OC43, bovine and equine coronavirus out of *Betacoronavirus 1*; MHV and rat coronavirus out of *Betacoronavirus muris*; IBV and turkey coronavirus out of *Gammacoronavirus galli*.
+- EV-A71, CVA16, CVA10, CVA6, CVB1 to CVB5, echovirus 18, poliovirus 1 to 3, CVA17, CVA24 out of *Enterovirus A*, *B* and *C*.
+- TGEV, PRCV, feline and canine coronavirus out of *Alphacoronavirus 1*; HCoV-OC43, bovine and equine coronavirus and porcine hemagglutinating encephalomyelitis virus out of *Betacoronavirus 1*; MHV and rat coronavirus out of *Betacoronavirus muris*; IBV and turkey coronavirus out of *Gammacoronavirus galli*.
 - AAV1, AAV2, AAV4, AAV5, AAV6, AAV8, AAV9 and bovine AAV out of the *Dependoparvovirus* species.
 - Murine norovirus out of *Norwalk virus*, avian erythroblastosis virus out of avian leukosis virus, PlxyMNPV out of AcMNPV.
 - CVA8 out of *Enterovirus A*, AAV4 out of *Dependoparvovirus primate1*, as the viruses above them.
