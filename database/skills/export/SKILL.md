@@ -57,7 +57,7 @@ The species of a viral interactor is given by the deepest taxon at or above its 
 
 ## The export
 
-`uv run ./database/scripts/export.py database/generic/ <workdir>/exports/ --run <id>`. Read-only on the database, it refuses to write anything while `database/generic/` is not in step. It writes five datasets, each as a `.tsv` and an `.xlsx` file named after the cut run (`descriptions_vh_run87.tsv`): `descriptions_hh`, `descriptions_vh`, `interactors_viral` (the sequence of each viral interactor), `mappings_h` and `mappings_v`; it prints the runs exported and the lines of each, then checks the files, read back, against each other and against the database: the numbers (live descriptions = exported + left out, a human interactor not up to date; mappings = lines + merged in homodimers), then `ok` or the failures, with an error.
+`uv run ./database/scripts/export.py database/generic/ <workdir>/exports/run<name>/ --run <id>`, a folder per cut run, named after it (`exports/run87/`). Read-only on the database, it refuses to write anything while `database/generic/` is not in step. It writes five datasets, each as a `.tsv` and an `.xlsx` file named after the cut run (`descriptions_vh_run87.tsv`): `descriptions_hh`, `descriptions_vh`, `interactors_viral` (the sequence of each viral interactor), `mappings_h` and `mappings_v`; it prints the runs exported and the lines of each, then checks the files, read back, against each other and against the database: the numbers (live descriptions = exported + left out, a human interactor not up to date; mappings = lines + merged in homodimers), then `ok` or the failures, with an error.
 
 ## Reply
 
