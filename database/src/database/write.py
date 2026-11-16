@@ -63,6 +63,25 @@ class Description:
 
 
 @dataclass(frozen=True)
+class Revised:
+    """What a revision decides for one description: a `Description` whose interactors are
+    snapshots, by their IDs (`proteins.id`), in place of accessions.
+
+    A human snapshot is the latest of its accession; a viral one is the snapshot decided: the one
+    the description was curated on, or another.
+    """
+
+    method: str
+    protein1_id: int
+    protein2_id: int
+    name2: str = ""
+    start2: int | None = None
+    stop2: int | None = None
+    mappings1: tuple[str, ...] = ()
+    mappings2: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class NewDescription:
     """A description to add to a publication, in its vh run, with its note."""
 
@@ -76,20 +95,19 @@ class Revision:
     """A decision on the live `version` of a description, refused if that version is no longer
     live.
 
-    `revise`: a new version, `version` + 1, holding `description`, with its note; it keeps the
-    snapshots of the description, even obsolete, except on a side whose accession changes. A
-    revision that changes nothing is refused, unless it changes only skipped mappings: it is then
-    skipped. `remove`: no successor, the `REMOVED` line added to the note of the live version.
-    With `into`, the removed description is a duplicate merged into that survivor: as it is, or
-    as `description` when it was decided to become the survivor, it has the same publication,
-    method and interactors, and the survivor holds all its mapping sequences.
+    `revise`: a new version, `version` + 1, holding `description`, on its snapshots, with its
+    note. A revision that changes nothing is refused, unless it changes only skipped mappings: it
+    is then skipped. `remove`: no successor, the `REMOVED` line added to the note of the live
+    version. With `into`, the removed description is a duplicate merged into that survivor: as it
+    is, or as `description` when it was decided to become the survivor, it has the same
+    publication, method and interactors, and the survivor holds all its mapping sequences.
     """
 
     stable_id: str
     version: int
     pmid: int
     action: Literal["revise", "remove"]
-    description: Description | None = None
+    description: Revised | None = None
     into: str = ""
     note: str = ""
 
@@ -173,41 +191,49 @@ class _Snapshot:
     type: str
     gene: str
     sequences: dict[str, str]
+    current: bool
 
     @property
     def length(self) -> int:
         return len(self.sequences[self.accession])
 
 
-def snapshot_of(cur: Any, accession: str, snapshot_id: int | None = None) -> _Snapshot:
-    """The current snapshot of an accession, or the given one (a revision keeps its own)."""
-    if snapshot_id is None:
-        cur.execute(
-            """
-            SELECT p.id, p.accession, p.type, p.name, p.sequences::text FROM proteins AS p
-            JOIN proteins_versions AS v ON v.accession = p.accession AND v.version = p.version
-            WHERE p.accession = %s
-            """,
-            (accession,),
-        )
-    else:
-        cur.execute(
-            "SELECT id, accession, type, name, sequences::text FROM proteins WHERE id = %s",
-            (snapshot_id,),
-        )
+SNAPSHOT = """
+    SELECT p.id, p.accession, p.type, p.name, p.sequences::text, v.accession IS NOT NULL
+    FROM proteins AS p
+    LEFT JOIN proteins_versions AS v ON v.accession = p.accession AND v.version = p.version
+"""
+
+
+def snapshot_of(cur: Any, accession: str) -> _Snapshot:
+    """The current snapshot of an accession."""
+    cur.execute(SNAPSHOT + "WHERE p.accession = %s AND v.accession IS NOT NULL", (accession,))
     rows = cur.fetchall()
     if not rows:
         raise InvalidRow(f"{accession} has no current snapshot")
     if len(rows) > 1:
         raise InvalidRow(f"{accession} has {len(rows)} current snapshots")
-    id_, accession, type_, gene, text = rows[0]
+    return _snapshot(rows[0])
+
+
+def snapshot_by_id(cur: Any, snapshot_id: int) -> _Snapshot:
+    """A snapshot, by its ID, current or obsolete."""
+    cur.execute(SNAPSHOT + "WHERE p.id = %s", (snapshot_id,))
+    row = cur.fetchone()
+    if row is None:
+        raise InvalidRow(f"snapshot {snapshot_id} does not exist")
+    return _snapshot(row)
+
+
+def _snapshot(row: tuple[Any, ...]) -> _Snapshot:
+    id_, accession, type_, gene, text, current = row
     raw: Any = json.loads(text)
     sequences = {k: v for k, v in cast(dict[str, Any], raw).items() if isinstance(v, str) and v}
     if accession not in sequences or len(sequences) != len(raw):
         raise InvalidRow(f"{accession} (snapshot {id_}) has a missing or empty sequence")
     if type_ == "h" and not (gene or "").strip():
         raise InvalidRow(f"{accession} (snapshot {id_}) is human without a gene name")
-    return _Snapshot(id_, accession, type_, gene or "", sequences)
+    return _Snapshot(id_, accession, type_, gene or "", sequences, current)
 
 
 @dataclass(frozen=True)
@@ -247,18 +273,26 @@ def _writable(association: Association) -> Association:
     return association
 
 
-def _build(
-    cur: Any,
-    association: Association,
-    item: Description,
-    kept: tuple[tuple[str, int], tuple[str, int]] | None = None,
-) -> dict[str, Any]:
-    """The columns of a description in the table of its run's type; raise `InvalidRow` with
-    every problem found.
+def _side(cur: Any, item: Description | Revised, side: int) -> _Snapshot:
+    """The snapshot of a side: the current snapshot of the accession of a description to add;
+    the snapshot of a revision, refused when it is human and not the latest of its accession."""
+    if isinstance(item, Description):
+        return snapshot_of(cur, (item.accession1, item.accession2)[side])
+    snapshot = snapshot_by_id(cur, (item.protein1_id, item.protein2_id)[side])
+    if snapshot.type == "h" and not snapshot.current:
+        try:
+            latest = f"its latest is {snapshot_of(cur, snapshot.accession).id}"
+        except InvalidRow:
+            latest = "it has no current snapshot"
+        raise InvalidRow(
+            f"snapshot {snapshot.id} of {snapshot.accession} is human and obsolete: {latest}"
+        )
+    return snapshot
 
-    `kept` is the (accession, snapshot ID) of each side of a revised description: a side that
-    keeps its accession keeps its snapshot, even obsolete; otherwise the current snapshot.
-    """
+
+def _build(cur: Any, association: Association, item: Description | Revised) -> dict[str, Any]:
+    """The columns of a description in the table of its run's type; raise `InvalidRow` with
+    every problem found."""
     problems: list[str] = []
     cur.execute("SELECT id FROM methods WHERE psimi_id = %s", (item.method,))
     method = cur.fetchone()
@@ -266,17 +300,15 @@ def _build(
         problems.append(f"unknown method {item.method}")
     snapshots: list[_Snapshot] = []
     expected = ("h", "v" if association.run_type == "vh" else "h")
-    for side, accession in enumerate((item.accession1, item.accession2)):
-        pinned = kept[side][1] if kept and kept[side][0] == accession else None
+    for side in (0, 1):
         try:
-            snapshot = snapshot_of(cur, accession, pinned)
+            snapshot = _side(cur, item, side)
         except InvalidRow as e:
             problems += [f"protein {side + 1}: {p}" for p in e.problems]
             continue
         if snapshot.type != expected[side]:
-            problems.append(
-                f"protein {side + 1}: {accession} is {'human' if snapshot.type == 'h' else 'viral'}"
-            )
+            kind = "human" if snapshot.type == "h" else "viral"
+            problems.append(f"protein {side + 1}: {snapshot.accession} is {kind}")
         snapshots.append(snapshot)
     if problems:
         raise InvalidRow(*problems)
@@ -465,8 +497,7 @@ def _revise(cur: Any, revision: Revision) -> str | None:
     table = TABLES[run_type]
     live = _live_description(cur, run_type, revision.stable_id)
     assert live is not None  # locked by `_live`
-    _, method_id, a1, id1, a2, id2, start2, stop2, mappings1, mappings2 = live
-    kept = ((a1, id1), (a2, id2))
+    _, method_id, _, id1, _, id2, start2, stop2, mappings1, mappings2 = live
     item = revision.description
     note = revision.note.strip()
 
@@ -477,7 +508,7 @@ def _revise(cur: Any, revision: Revision) -> str | None:
                 removed = (association.id, method_id, id1, id2, start2, stop2)
                 removed += (_sequences(mappings1), _sequences(mappings2))
             else:
-                row = _build(cur, association, item, kept)
+                row = _build(cur, association, item)
                 removed = (association.id, row["method_id"], row["protein1_id"], row["protein2_id"])
                 removed += _span(row)
                 removed += (_sequences(row["mapping1"]), _sequences(row["mapping2"]))
@@ -495,7 +526,7 @@ def _revise(cur: Any, revision: Revision) -> str | None:
 
     if item is None:
         raise InvalidRow(f"{revision.stable_id}: a revision needs its description")
-    row = _build(cur, association, item, kept)
+    row = _build(cur, association, item)
     cur.execute(
         f"SELECT {', '.join(row)} FROM {table} WHERE stable_id = %s AND version = %s",
         (revision.stable_id, version),
@@ -516,32 +547,26 @@ def _revise(cur: Any, revision: Revision) -> str | None:
 
 def live_revisions(cur: Any, pmid: int) -> list[Revision]:
     """The live descriptions of a publication in its vh run, each as a `revise` row to edit
-    (empty note).
-
-    Accessions are those of the snapshots used, even obsolete: a revision keeps them unless the
-    accession changes.
-    """
+    (empty note), on the snapshots it uses, even obsolete."""
     association = vh_association(cur, pmid)
     cur.execute(
         """
-        SELECT d.stable_id, d.version, m.psimi_id, p1.accession, p2.accession, d.name2, d.start2,
-               d.stop2, d.mapping1::text, d.mapping2::text
+        SELECT d.stable_id, d.version, m.psimi_id, d.protein1_id, d.protein2_id, d.name2,
+               d.start2, d.stop2, d.mapping1::text, d.mapping2::text
         FROM descriptions_vh AS d
         JOIN methods AS m ON m.id = d.method_id
-        JOIN proteins AS p1 ON p1.id = d.protein1_id
-        JOIN proteins AS p2 ON p2.id = d.protein2_id
         WHERE d.association_id = %s AND d.deleted_at IS NULL
         ORDER BY d.stable_id
         """,
         (association.id,),
     )
     revisions: list[Revision] = []
-    for stable_id, version, method, a1, a2, name2, start2, stop2, m1, m2 in cur:
+    for stable_id, version, method, id1, id2, name2, start2, stop2, m1, m2 in cur:
         mappings = [cast(list[dict[str, Any]], json.loads(m)) for m in (m1, m2)]
-        description = Description(
+        description = Revised(
             method=method,
-            accession1=a1,
-            accession2=a2,
+            protein1_id=id1,
+            protein2_id=id2,
             name2=name2,
             start2=start2,
             stop2=stop2,

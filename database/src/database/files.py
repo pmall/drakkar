@@ -19,7 +19,9 @@ type, is refused with its file and line. The notes follow `docs/database.md#note
 
 Each row is an object of `write.py`, its keys its fields, those of its `Description` in line:
 `method`, `accession1`, `accession2`, `start2` and `stop2` (numbers, or null for the full
-protein), `name2`, `mappings1` and `mappings2` (lists of mapping sequences).
+protein), `name2`, `mappings1` and `mappings2` (lists of mapping sequences). A revision gives a
+`Revised` in line: the same keys, with the snapshot IDs `protein1_id` and `protein2_id` in place
+of the accessions.
 
 Descriptions to add (`*.jsonl`), one line per new description, a `NewDescription`: `pmid` (a
 number), the keys of its `Description`, `note`. One line, wrapped here:
@@ -30,8 +32,12 @@ number), the keys of its `Description`, `note`. One line, wrapped here:
 
 Revisions (`*.revise.jsonl`, `*.delete.jsonl`), one line per revised or removed description, a
 `Revision`: `stable_id`, `version` (a number), `pmid` (a number), `action` (`revise` or
-`remove`), `into` (a stable ID, or null), the keys of its `Description` (null on a `remove`,
-unless it gives what a merged duplicate was decided to become), `note`.
+`remove`), `into` (a stable ID, or null), the keys of its `Revised` (null on a `remove`, unless
+it gives what a merged duplicate was decided to become), `note`. One line, wrapped here:
+
+    {"stable_id": "EY73D2C965", "version": 1, "pmid": 22046132, "action": "revise", "into": null,
+    "method": "MI:0007", "protein1_id": 13474, "protein2_id": 1656612, "start2": 1, "stop2": 63,
+    "name2": "orf6", "mappings1": [], "mappings2": [], "note": "FIXED: ..."}
 
 Publications (`*.jsonl`), one line per publication whose state or note changes, a
 `PublicationUpdate`: `pmid` (a number), `state` (`selected`, `curated` or `discarded`), `note`.
@@ -54,6 +60,7 @@ from database.write import (
     NewDescription,
     Outcome,
     PublicationUpdate,
+    Revised,
     Revision,
     add_descriptions,
     revise_descriptions,
@@ -72,7 +79,8 @@ DESCRIPTION = [
     "mappings2",
 ]
 ADD = ["pmid", *DESCRIPTION, "note"]
-REVISE = ["stable_id", "version", "pmid", "action", "into", *DESCRIPTION, "note"]
+REVISED = ["method", "protein1_id", "protein2_id", *DESCRIPTION[3:]]
+REVISE = ["stable_id", "version", "pmid", "action", "into", *REVISED, "note"]
 PUBLICATIONS = ["pmid", "state", "note"]
 # The files of a batch: the descriptions to add and the publications, and the files of
 # `diff`; a descriptions file may be missing. Of the additions, only the first present is
@@ -174,6 +182,20 @@ def _description(where: str, row: dict[str, Any]) -> Description:
     )
 
 
+def _revised(where: str, row: dict[str, Any]) -> Revised:
+    """The description keys of a revision, from `method` to `mappings2`."""
+    return Revised(
+        method=_text(where, row, "method").strip(),
+        protein1_id=_number(where, row, "protein1_id"),
+        protein2_id=_number(where, row, "protein2_id"),
+        start2=None if row["start2"] is None else _number(where, row, "start2"),
+        stop2=None if row["stop2"] is None else _number(where, row, "stop2"),
+        name2=_text(where, row, "name2").strip(),
+        mappings1=_texts(where, row, "mappings1"),
+        mappings2=_texts(where, row, "mappings2"),
+    )
+
+
 def new_description(where: str, row: dict[str, Any]) -> NewDescription:
     """A description to add, from its JSON object."""
     return NewDescription(
@@ -192,13 +214,13 @@ def revision(where: str, row: dict[str, Any]) -> Revision:
     into: object = row["into"]
     if into is not None and not isinstance(into, str):
         raise FileError(f"{where}: into is not a string or null: {into!r}")
-    described = any(row[key] is not None for key in DESCRIPTION)
+    described = any(row[key] is not None for key in REVISED)
     return Revision(
         stable_id=_text(where, row, "stable_id").strip(),
         version=_number(where, row, "version"),
         pmid=_number(where, row, "pmid"),
         action=action,
-        description=_description(where, row) if described else None,
+        description=_revised(where, row) if described else None,
         into=(into or "").strip(),
         note=_text(where, row, "note"),
     )
@@ -212,14 +234,17 @@ def publication(where: str, row: dict[str, Any]) -> PublicationUpdate:
     return PublicationUpdate(_number(where, row, "pmid"), state, _text(where, row, "note"))
 
 
-def _description_values(d: Description | None) -> dict[str, Any]:
+def _description_values(d: Description | Revised | None) -> dict[str, Any]:
     """The description keys of a row, null without a description."""
     if d is None:
-        return dict.fromkeys(DESCRIPTION)
+        return dict.fromkeys(REVISED)
+    if isinstance(d, Revised):
+        interactors = {"protein1_id": d.protein1_id, "protein2_id": d.protein2_id}
+    else:
+        interactors = {"accession1": d.accession1, "accession2": d.accession2}
     return {
         "method": d.method,
-        "accession1": d.accession1,
-        "accession2": d.accession2,
+        **interactors,
         "start2": d.start2,
         "stop2": d.stop2,
         "name2": d.name2,

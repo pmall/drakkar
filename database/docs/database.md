@@ -59,9 +59,9 @@ Y2H, see table S2
 - A version is identified by its stable ID and its version number, unique within its table: a stable ID is unique within vh or within hh, so outside Drakkar it is given after its type (`VH:CW12AB34CD`).
 - An interactor identifies a sequence: a viral interactor is (snapshot, start, stop), a human interactor a snapshot. A snapshot is reached through `proteins.id`.
 - **Nothing is ever deleted.** A revision deletes the live version (`deleted_at`) and inserts the next version under the same stable ID at the same instant; a removal deletes the live version with no successor. A stable ID never changes and keeps its publication (V6); uniqueness (D5) applies to live versions only.
-- **Errors in the data** (invariant violations) should not happen: every write is checked. An error found anyway is fixed outside the regular process, decided with the user: a fix corrects a description against its own snapshots, never moves it to another snapshot (that is the versioning pass), and goes through `database/scripts/revise.py` with a `FIXED` note. A malformed mapping (D11) is corrected in place, without a revision, on every version that has it: its values stay the same and nothing else in the row changes.
+- **Errors in the data** (invariant violations) should not happen: every write is checked. An error found anyway is fixed outside the regular process, decided with the user: a fix is a revision, and goes through `database/scripts/revise.py` with a `FIXED` note. A malformed mapping (D11) is corrected in place, without a revision, on every version that has it: its values stay the same and nothing else in the row changes.
 - **Writes**: descriptions and publication states are written only by the write scripts, which check each row and every invariant (`#invariants`) on the result before they commit. What each write checks, derives and refuses is in `database/src/database/write.py`, its files in `files.py`.
-- Moving an interactor to the current snapshot of the same accession is the versioning pass, not a revision.
+- A new description is on the current snapshots of its accessions. A revision names the snapshots of its interactors: a human one is always the latest of its accession, a viral one the snapshot decided, the one it was curated on unless it is moved.
 
 ## UniProt versioning <a id="uniprot"></a>
 

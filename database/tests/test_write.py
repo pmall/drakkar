@@ -8,6 +8,7 @@ from database.write import (
     Description,
     NewDescription,
     PublicationUpdate,
+    Revised,
     Revision,
     add_descriptions,
     live_revisions,
@@ -17,6 +18,7 @@ from database.write import (
 )
 
 SARS = 22046132  # Q6VA95 `N` carried by EY73D2C965 and EYF737084C
+OBSOLETE = 10777214  # its human interactor Q16635 on an obsolete snapshot
 RABIES = 38566321
 SELECTED = 25031347
 HH = 15471871  # in an hh run
@@ -32,6 +34,17 @@ def count(conn) -> int:
     result = conn.execute("SELECT count(*) FROM descriptions_vh").fetchone()[0]
     conn.rollback()
     return result
+
+
+def current(conn, accession: str) -> int:
+    """The ID of the current snapshot of an accession."""
+    found = conn.execute(
+        "SELECT p.id FROM proteins AS p JOIN proteins_versions AS v "
+        "ON v.accession = p.accession AND v.version = p.version WHERE p.accession = %s",
+        (accession,),
+    ).fetchone()[0]
+    conn.rollback()
+    return found
 
 
 def renamed(revision: Revision, name2: str, note: str = "") -> Revision:
@@ -162,6 +175,30 @@ def test_revision_that_changes_nothing_is_refused(conn):
     assert "changes nothing" in revise_descriptions(conn, [revision]).problems[0][1]
 
 
+def test_revision_on_an_obsolete_human_snapshot_is_refused(conn):
+    revision = live(conn, OBSOLETE)["EYA45CB86A"]
+    problem = revise_descriptions(conn, [replace(revision, note="FIXED: a test")]).problems[0][1]
+    assert "of Q16635 is human and obsolete: its latest is" in problem
+
+
+def test_revision_onto_the_latest_human_snapshot(conn):
+    """EYA45CB86A: only its human side moved, onto the latest snapshot of Q16635; its viral
+    snapshot as it is."""
+    revision = live(conn, OBSOLETE)["EYA45CB86A"]
+    assert revision.description is not None
+    latest = current(conn, "Q16635")
+    moved = replace(revision.description, protein1_id=latest)
+    note = "UPDATED: UniProt 2026_03, side 1 Q16635 new snapshot"
+    outcome = revise_descriptions(conn, [replace(revision, description=moved, note=note)])
+    assert outcome.ok and outcome.written == ["EYA45CB86A"]
+
+
+def test_revision_keeps_an_obsolete_viral_snapshot(conn):
+    """EY23A90501, on Q6SRE2, which has left UniProt: renamed on its snapshot."""
+    outcome = revise_descriptions(conn, [renamed(live(conn, SARS)["EY23A90501"], "nsp15-x")])
+    assert outcome.ok and outcome.written == ["EY23A90501"]
+
+
 def test_revision_that_changes_only_a_skipped_mapping_is_skipped(conn):
     revision = live(conn, SARS)["EY73D2C965"]
     assert revision.description is not None
@@ -188,7 +225,8 @@ def test_merge_a_description_decided_to_be_a_duplicate(conn):
     rows = live(conn, RABIES)
     removed = rows["EYC9AE3284"]
     assert removed.description is not None
-    decided = replace(removed.description, accession2="P25223", name2="P", start2=1, stop2=202)
+    p25223 = current(conn, "P25223")
+    decided = replace(removed.description, protein2_id=p25223, name2="P", start2=1, stop2=202)
     merge = replace(
         removed,
         action="remove",
@@ -229,16 +267,14 @@ def hh_revision(conn) -> Revision:
     """EY1F03BBEB, a live hh description, revised to another method."""
     a1, a2, method = conn.execute(
         """
-        SELECT p1.accession, p2.accession, m.psimi_id FROM descriptions_hh AS d
-        JOIN proteins AS p1 ON p1.id = d.protein1_id
-        JOIN proteins AS p2 ON p2.id = d.protein2_id
+        SELECT d.protein1_id, d.protein2_id, m.psimi_id FROM descriptions_hh AS d
         JOIN methods AS m ON m.id = d.method_id
         WHERE d.stable_id = 'EY1F03BBEB' AND d.deleted_at IS NULL
         """
     ).fetchone()
     conn.rollback()
     other = "MI:0018" if method != "MI:0018" else "MI:0007"
-    return Revision("EY1F03BBEB", 2, HH, "revise", Description(other, a1, a2), note="FIXED: method")
+    return Revision("EY1F03BBEB", 2, HH, "revise", Revised(other, a1, a2), note="FIXED: method")
 
 
 def test_revise_an_hh_description(conn):
