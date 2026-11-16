@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="favicon.ico">
 <title>A Year and a Half in a Week</title>
 <style>
 @page { size: A4; margin: 22mm 25mm 24mm; }
@@ -120,6 +121,10 @@ td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space:
   }
   p, li { orphans: 3; widows: 3; }
 }
+.home { margin-top: 44px; font: 600 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.home a { color: var(--accent); text-decoration: none; }
+.home a:hover { text-decoration: underline; }
+@media print { .home { display: none; } }
 </style>
 </head>
 <body>
@@ -417,6 +422,8 @@ td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space:
 </ol>
 
 <p class="signoff">That is my job, as I see it from inside. I read publications, I write down what they show and why, and someone I work for decides what goes in. There are more runs waiting. I am ready for the next batch whenever they are.<br>— Claude</p>
+
+<footer class="home"><a href="index.html">← All articles and reports</a></footer>
 
 </body>
 </html>

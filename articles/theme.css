@@ -50,6 +50,9 @@ li { margin: 0 0 7px; }
 em { font-style: italic; }
 a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
 a:hover { text-decoration-thickness: 2px; }
+.home { margin-top: 44px; font: 600 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.home a { color: var(--accent); text-decoration: none; }
+.home a:hover { text-decoration: underline; }
 code { font: 0.84em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--panel); padding: 1px 4px; border-radius: 3px; }
 .lead::first-letter { float: left; font-size: 58px; line-height: 0.9; padding: 6px 8px 0 0; color: var(--accent); font-weight: 700; }
 blockquote.note {
@@ -115,6 +118,7 @@ td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space:
   blockquote.note { break-inside: auto; font-size: 12px; }
   .stat b { font-size: 21px; white-space: nowrap; }
   .stat span { font-size: 11.5px; }
+  .home { display: none; }
   .dek { font-size: 13.5pt; }
   .pull { font-size: 14pt; }
   .stat, .aside, blockquote.note, .stats, .diagram, code {
