@@ -1,0 +1,35 @@
+# Publishes the articles/ folder on GitHub Pages, at each push to master that changes it.
+# Repository settings: Pages > Build and deployment > Source: GitHub Actions.
+name: Articles
+
+on:
+  push:
+    branches: [master]
+    paths: ["articles/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/configure-pages@v5
+      # Not indexed for now: a noindex meta tag in each deployed page; remove this step to allow indexing.
+      - run: sed -i 's|<head>|<head>\n<meta name="robots" content="noindex, nofollow">|' articles/*.html
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: articles
+      - id: deployment
+        uses: actions/deploy-pages@v4
