@@ -47,7 +47,16 @@ HH = [
     "accession2",
     "gene_name2",
 ]
-INTERACTORS = ["release", "accession", "start", "stop", "sequence"]
+INTERACTORS_H = ["release", "accession", "gene_name", "uniprot_name", "sequence"]
+INTERACTORS_V = [
+    "release",
+    "accession",
+    "gene_name",
+    "uniprot_name",
+    "start",
+    "stop",
+    "sequence",
+]
 MAPPINGS_H = ["stable_id", "sequence", "release", "accession", "isoform", "target", "nter", "cter"]
 MAPPINGS_V = [
     "stable_id",
@@ -108,6 +117,7 @@ def check_export(
     database: the numbers, then the failures. `runs` are the IDs of the vh runs exported."""
     hh = _read(directory / f"descriptions_hh_{top}.tsv")
     vh = _read(directory / f"descriptions_vh_{top}.tsv")
+    humans = _read(directory / f"interactors_human_{top}.tsv")
     interactors = _read(directory / f"interactors_viral_{top}.tsv")
     mappings_h = _read(directory / f"mappings_h_{top}.tsv")
     mappings_v = _read(directory / f"mappings_v_{top}.tsv")
@@ -135,6 +145,18 @@ def check_export(
         failures.append(f"viral interactor without its line: {' '.join(k)}")
     for k in sorted(written - used):
         failures.append(f"viral interactor of no description: {' '.join(k)}")
+
+    # each human entry on one line, the human interactors of the descriptions among them
+    entries: dict[str, str] = {}
+    for r in humans:
+        if r["accession"] in entries:
+            failures.append(f"human entry on several lines: {r['accession']}")
+        entries[r["accession"]] = r["release"]
+    sides = [(r["release1"], r["accession1"]) for r in vh + hh]
+    sides += [(r["release2"], r["accession2"]) for r in hh]
+    for release, accession in sorted(set(sides)):
+        if entries.get(accession) != release:
+            failures.append(f"human interactor without its line: {release} {accession}")
 
     # each mapping on one line, on an interactor of its description, in the file of its target
     checked = [(line, "mappings_h", line["target"]) for line in mappings_h]
@@ -208,6 +230,19 @@ def check_export(
     )
     counts = {kind: (live, left, m, merged) for kind, live, left, m, merged in cur.fetchall()}
     numbers: list[str] = []
+    cur.execute(
+        """
+        SELECT count(*)
+        FROM proteins_versions AS v
+        JOIN proteins AS p ON p.accession = v.accession AND p.version = v.version
+        WHERE v.reviewed AND p.type = 'h'
+        """
+    )
+    (current,) = cur.fetchone()
+    sign = "=" if current == len(humans) else "≠"
+    numbers.append(f"human Swiss-Prot entries: {current} current {sign} {len(humans)} lines")
+    if sign == "≠":
+        failures.append("human Swiss-Prot entries: the numbers do not add up")
     for kind, rows in (("vh", vh), ("hh", hh)):
         live, left_out, _, _ = counts.get(kind, (0, 0, 0, 0))
         sign = "=" if live == len(rows) + left_out else "≠"
@@ -236,7 +271,7 @@ def export(
     directory: Path,
     run: int | None = None,
 ) -> str:
-    """Write the five datasets to the directory; the report: what each holds."""
+    """Write the six datasets to the directory; the report: what each holds."""
     runs = _runs(cur, run)
     cur.execute(
         """
@@ -284,10 +319,18 @@ def export(
         for row in vh
     }
     cur.execute(
-        "SELECT id, sequences ->> accession AS sequence FROM proteins WHERE id = ANY(%s)",
+        """
+        SELECT id, name AS gene_name, description AS uniprot_name,
+               sequences ->> accession AS sequence
+        FROM proteins
+        WHERE id = ANY(%s)
+        """,
         (list(set(interactors.values())),),
     )
-    sequences: dict[int, str] = dict(cur.fetchall())
+    snapshots: dict[int, tuple[str, str, str]] = {
+        i: (gene_name, uniprot_name, sequence)
+        for i, gene_name, uniprot_name, sequence in cur.fetchall()
+    }
 
     cur.execute(
         """
@@ -330,6 +373,19 @@ def export(
                 line += [row["start2"], row["stop2"], isoform, nter, cter]
             mappings[kind].setdefault((row["stable_id"], sequence, isoform), line)
 
+    # the current human Swiss-Prot entries, each with its names and canonical sequence
+    cur.execute(
+        """
+        SELECT p.version AS release, p.accession, p.name AS gene_name,
+               p.description AS uniprot_name, p.sequences ->> p.accession AS sequence
+        FROM proteins_versions AS v
+        JOIN proteins AS p ON p.accession = v.accession AND p.version = v.version
+        WHERE v.reviewed AND p.type = 'h'
+        ORDER BY p.version, p.accession
+        """
+    )
+    humans = [list(row) for row in cur.fetchall()]
+
     cur.execute(
         "SELECT name FROM runs WHERE id = %s",
         (max(runs),),
@@ -339,12 +395,13 @@ def export(
     directory.mkdir(parents=True, exist_ok=True)
     _write(directory, f"descriptions_hh_{top}", HH, [[row[c] for c in HH] for row in hh])
     _write(directory, f"descriptions_vh_{top}", VH, [[row[c] for c in VH] for row in vh])
+    _write(directory, f"interactors_human_{top}", INTERACTORS_H, humans)
     _write(
         directory,
         f"interactors_viral_{top}",
-        INTERACTORS,
+        INTERACTORS_V,
         [
-            [release, accession, start, stop, sequences[i][start - 1 : stop]]
+            [release, accession, *snapshots[i][:2], start, stop, snapshots[i][2][start - 1 : stop]]
             for (release, accession, start, stop), i in sorted(interactors.items())
         ],
     )
@@ -355,6 +412,7 @@ def export(
         f"vh runs: {len(runs)}, {'all' if run is None else f'up to ID {run}'}",
         f"descriptions_hh_{top} (.tsv, .xlsx): {len(hh)} descriptions",
         f"descriptions_vh_{top} (.tsv, .xlsx): {len(vh)} descriptions",
+        f"interactors_human_{top} (.tsv, .xlsx): {len(humans)} human Swiss-Prot entries",
         f"interactors_viral_{top} (.tsv, .xlsx): {len(interactors)} viral interactors",
         f"mappings_h_{top} (.tsv, .xlsx): {len(mappings['h'])} mappings",
         f"mappings_v_{top} (.tsv, .xlsx): {len(mappings['v'])} mappings",

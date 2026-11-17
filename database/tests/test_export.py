@@ -6,7 +6,16 @@ from pathlib import Path
 import pytest
 from openpyxl import load_workbook
 
-from database.export import HH, INTERACTORS, MAPPINGS_H, MAPPINGS_V, VH, check_export, export
+from database.export import (
+    HH,
+    INTERACTORS_H,
+    INTERACTORS_V,
+    MAPPINGS_H,
+    MAPPINGS_V,
+    VH,
+    check_export,
+    export,
+)
 from database.generic import sync
 
 
@@ -65,10 +74,12 @@ def test_export(conn, tmp_path):
         "vh runs: 6, all",
         "descriptions_hh_run81 (.tsv, .xlsx): 5 descriptions",
         "descriptions_vh_run81 (.tsv, .xlsx): 425 descriptions",
+        "interactors_human_run81 (.tsv, .xlsx): 126 human Swiss-Prot entries",
         "interactors_viral_run81 (.tsv, .xlsx): 171 viral interactors",
         "mappings_h_run81 (.tsv, .xlsx): 308 mappings",
         "mappings_v_run81 (.tsv, .xlsx): 424 mappings",
         "check:",
+        "  human Swiss-Prot entries: 126 current = 126 lines",
         "  vh descriptions: 427 live = 425 exported + 2 left out "
         "(a human interactor not up to date)",
         "  hh descriptions: 5 live = 5 exported + 0 left out (a human interactor not up to date)",
@@ -108,19 +119,19 @@ def test_export(conn, tmp_path):
     assert obsolete and not obsolete & {r[0] for r in vh}  # a human interactor not up to date
 
     interactors = _lines(tmp_path / "out" / "interactors_viral_run81.tsv")
-    assert interactors[0] == INTERACTORS
-    keys = [tuple(r[:4]) for r in interactors[1:]]
+    assert interactors[0] == INTERACTORS_V
+    keys = [(r[0], r[1], r[4], r[5]) for r in interactors[1:]]
     assert len(keys) == len(set(keys)) == len({(r[13], r[14], r[17], r[18]) for r in vh[1:]})
     assert set(keys) == {(r[13], r[14], r[17], r[18]) for r in vh[1:]}
     cur.execute(
         """
-        SELECT substr(sequences ->> accession, 1977, 2442 - 1977 + 1)
+        SELECT name, description, substr(sequences ->> accession, 1977, 2442 - 1977 + 1)
         FROM proteins
         WHERE accession = 'Q99IB8' AND version = '2019_01'
         """
     )
-    (ns5a,) = cur.fetchone()
-    assert ["2019_01", "Q99IB8", "1977", "2442", ns5a] in interactors  # a mature protein
+    name, description, ns5a = cur.fetchone()
+    assert ["2019_01", "Q99IB8", name, description, "1977", "2442", ns5a] in interactors  # a chain
 
     hh = _lines(tmp_path / "out" / "descriptions_hh_run81.tsv")
     assert hh[0] == HH
@@ -129,16 +140,35 @@ def test_export(conn, tmp_path):
         "2019_01", "Q96RI1", "NR1H4", "2020_03", "P68431", "H3C1",
     ]  # fmt: skip
 
+    # every current human Swiss-Prot entry once, with its canonical sequence, the human
+    # interactors of the descriptions among them
+    humans = _lines(tmp_path / "out" / "interactors_human_run81.tsv")
+    assert humans[0] == INTERACTORS_H
+    assert humans[1:] == sorted(humans[1:])
+    cur.execute(
+        """
+        SELECT p.version, p.accession, p.name, p.description, p.sequences ->> p.accession
+        FROM proteins_versions AS v
+        JOIN proteins AS p ON p.accession = v.accession AND p.version = v.version
+        WHERE v.reviewed AND p.type = 'h'
+        """
+    )
+    assert sorted(humans[1:]) == sorted(list(row) for row in cur.fetchall())
+    used = {(r[5], r[6]) for r in vh[1:]} | {(r[5], r[6]) for r in hh[1:]}
+    used |= {(r[8], r[9]) for r in hh[1:]}
+    assert used <= {(r[0], r[1]) for r in humans[1:]}
+
     # the .xlsx: the same lines, numbers as numbers
     for name, lines in [
         ("descriptions_hh_run81", hh),
         ("descriptions_vh_run81", vh),
+        ("interactors_human_run81", humans),
         ("interactors_viral_run81", interactors),
     ]:
         sheet = load_workbook(tmp_path / "out" / f"{name}.xlsx", read_only=True)[name]
         rows = list(sheet.iter_rows(values_only=True))
         assert [["" if v is None else str(v) for v in row] for row in rows] == lines
-    assert rows[1][2] == 1 and isinstance(rows[1][2], int)  # interactors_viral_run81: start
+    assert rows[1][4] == 1 and isinstance(rows[1][4], int)  # interactors_viral_run81: start
 
 
 def test_runs(conn, tmp_path):
@@ -252,12 +282,15 @@ def test_check(conn, tmp_path):
         path.write_text("".join(line + "\n" for line in change(lines)))
 
     edit("descriptions_hh", lambda lines: [*lines, lines[1]])  # a description repeated
+    human = _lines(out / "descriptions_hh_run81.tsv")[1][5:7]  # an hh interactor's line gone
+    edit("interactors_human", lambda lines: [ln for ln in lines if ln.split("\t")[:2] != human])
+    edit("interactors_human", lambda lines: [*lines, lines[1]])  # an entry repeated
     edit("interactors_viral", lambda lines: [lines[0], *lines[2:]])  # an interactor gone
     first = _lines(out / "interactors_viral_run81.tsv")[1]
     edit(  # a sequence cut
         "interactors_viral",
         lambda lines: [
-            line[:-1] if line.startswith("\t".join(first[:4])) else line for line in lines
+            line[:-1] if line.startswith("\t".join(first[:6])) else line for line in lines
         ],
     )
     edit("mappings_v", lambda lines: [*lines, lines[1]])  # a mapping repeated
@@ -268,12 +301,18 @@ def test_check(conn, tmp_path):
     )
 
     numbers, failures = check_export(conn.cursor(), out, "run81", [1, 12, 30, 44, 56, 69])
+    assert "human Swiss-Prot entries: 126 current = 126 lines" in numbers  # one gone, one added
+    assert f"human interactor without its line: {' '.join(human)}" in failures
+    repeated = _lines(out / "interactors_human_run81.tsv")[1][1]
+    assert f"human entry on several lines: {repeated}" in failures
     assert (
         "hh descriptions: 5 live ≠ 6 exported + 0 left out (a human interactor not up to date)"
         in numbers
     )
     assert f"description on 2 lines: {_lines(out / 'descriptions_hh_run81.tsv')[1][0]}" in failures
-    assert f"sequence not as long as its coordinates: {' '.join(first[:4])}" in failures
+    assert (
+        f"sequence not as long as its coordinates: {' '.join(first[:2] + first[4:6])}" in failures
+    )
     assert any(f.startswith("viral interactor without its line: ") for f in failures)
     assert any(f.startswith("mappings_v: mapping on several lines: ") for f in failures)
     assert f"mappings_h: {mapping[2]} P99999 not an interactor of {mapping[0]}" in failures

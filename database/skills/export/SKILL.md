@@ -1,12 +1,12 @@
 ---
 name: export
 disable-model-invocation: true
-description: "The derived datasets exported from Drakkar: the run cut agreed with the user, the generic viral proteins of database/generic/ brought in step (new species placed, new generic names grouped), then the five datasets written as .tsv and .xlsx."
+description: "The derived datasets exported from Drakkar: the run cut agreed with the user, the generic viral proteins of database/generic/ brought in step (new species placed, new generic names grouped), then the six datasets written as .tsv and .xlsx."
 ---
 
 # Export
 
-The derived datasets are files for other applications, exported from the live descriptions: the hh and vh descriptions, the sequences of the viral interactors, the human and viral mappings. The vh descriptions show each interaction as one human Swiss-Prot entry × one generic viral protein: one node of an interaction graph, one name in a species, from the files of `database/generic/`, which you bring in step with Drakkar before each export. Read no doc: this skill is the whole process. You write only the files of `database/generic/` and the export, never the database.
+The derived datasets are files for other applications, exported from the live descriptions: the hh and vh descriptions, the human Swiss-Prot entries and the viral interactors with their sequences, the human and viral mappings. The vh descriptions show each interaction as one human Swiss-Prot entry × one generic viral protein: one node of an interaction graph, one name in a species, from the files of `database/generic/`, which you bring in step with Drakkar before each export. Read no doc: this skill is the whole process. You write only the files of `database/generic/` and the export, never the database.
 
 ## The run cut
 
@@ -57,7 +57,7 @@ The species of a viral interactor is given by the deepest taxon at or above its 
 
 ## The export
 
-`uv run ./database/scripts/export.py database/generic/ <datadir>/exports/run<name>/ --run <id>`, a folder per cut run, named after it (`exports/run87/`). Read-only on the database, it refuses to write anything while `database/generic/` is not in step. It writes five datasets, each as a `.tsv` and an `.xlsx` file named after the cut run (`descriptions_vh_run87.tsv`): `descriptions_hh`, `descriptions_vh`, `interactors_viral` (the sequence of each viral interactor), `mappings_h` and `mappings_v`; it prints the runs exported and the lines of each, then checks the files, read back, against each other and against the database: the numbers (live descriptions = exported + left out, a human interactor not up to date; mappings = lines + merged in homodimers), then `ok` or the failures, with an error.
+`uv run ./database/scripts/export.py database/generic/ <datadir>/exports/run<name>/ --run <id>`, a folder per cut run, named after it (`exports/run87/`). Read-only on the database, it refuses to write anything while `database/generic/` is not in step. It writes six datasets, each as a `.tsv` and an `.xlsx` file named after the cut run (`descriptions_vh_run87.tsv`): `descriptions_hh`, `descriptions_vh`, `interactors_human` (each human Swiss-Prot entry of the latest release with its names and sequence), `interactors_viral` (each viral interactor with its names and sequence), `mappings_h` and `mappings_v`; it prints the runs exported and the lines of each, then checks the files, read back, against each other and against the database: the numbers (human Swiss-Prot entries = lines of `interactors_human`; live descriptions = exported + left out, a human interactor not up to date; mappings = lines + merged in homodimers), then `ok` or the failures, with an error.
 
 ## Reply
 

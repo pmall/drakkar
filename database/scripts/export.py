@@ -3,13 +3,13 @@ database).
 
     uv run ./database/scripts/export.py <generic> <dir> [--run <id>]
 
-Writes the five datasets to the directory, from the live descriptions whose human interactors are
-on their current snapshots, in Swiss-Prot: of the vh runs up to `--run`, all by default; of every
-hh run. A run is given by its ID (`runs.id`), not its name, so that an export can stop before a
-run in progress; a cut that is not the ID of a vh run is refused. The species and generic viral
-proteins are read from `<generic>`, the directory of their files
-(`database/src/database/generic.py`), in step with Drakkar: a taxon under no species, a species not
-in `species.tsv` or a name with no protein is reported, and nothing is written.
+Writes the six datasets to the directory: the current human Swiss-Prot entries, and the live
+descriptions whose human interactors are on their current snapshots, in Swiss-Prot: of the vh runs
+up to `--run`, all by default; of every hh run. A run is given by its ID (`runs.id`), not its name,
+so that an export can stop before a run in progress; a cut that is not the ID of a vh run is
+refused. The species and generic viral proteins are read from `<generic>`, the directory of their
+files (`database/src/database/generic.py`), in step with Drakkar: a taxon under no species, a
+species not in `species.tsv` or a name with no protein is reported, and nothing is written.
 
 Each dataset is written as a `.tsv` file, tab-separated under a header line, and an `.xlsx` file,
 the same lines; each name ends with `run` and the name of the last vh run exported by ID, each
@@ -27,10 +27,15 @@ or `VH:CW12AB34CD`: a stable ID is unique within its type only.
   `strain` (its scientific name, empty when the taxon is missing from the NCBI taxonomy),
   `release2`, `accession2`, `uniprot_name2` (the UniProt protein name), `generic_name2`,
   `start2`, `stop2`. One line per description, sorted by stable ID.
-- `interactors_viral`: `release`, `accession`, `start`, `stop`, `sequence` (the canonical
-  sequence from start to stop): one line per viral interactor of `descriptions_vh` (`release2`,
-  `accession2`, `start2`, `stop2`), sorted by its columns. The snapshot of an entry gone from
-  UniProt can be read nowhere else.
+- `interactors_human`: `release` (the release its snapshot first appeared in), `accession`,
+  `gene_name`, `uniprot_name` (the UniProt protein name), `sequence` (the canonical sequence): one
+  line per human Swiss-Prot entry of the latest UniProt release, on its current snapshot, the human
+  interactors of both descriptions datasets among them, sorted by its columns. Swiss-Prot as
+  Drakkar uses it, without downloading it again.
+- `interactors_viral`: `release`, `accession`, `gene_name`, `uniprot_name`, as in
+  `interactors_human`, `start`, `stop`, `sequence` (the canonical sequence from start to stop): one
+  line per viral interactor of `descriptions_vh` (`release2`, `accession2`, `start2`, `stop2`),
+  sorted by its columns. The snapshot of an entry gone from UniProt can be read nowhere else.
 - `mappings_h`: `stable_id`, `sequence` (as the experiment used it, its extra end residues
   included, in lowercase: `mSTNPK`), the interactor: `release`, `accession`; `isoform` (the
   isoform it is found on: the canonical one, the accession, when the mapping occurs on it, else
@@ -43,10 +48,12 @@ or `VH:CW12AB34CD`: a stable ID is unique within its type only.
   `descriptions_vh`. Sorted by its columns.
 
 Prints the runs exported and the lines of each dataset, then checks the `.tsv` files, read back
-(`check_export`): each description on one line in one file; the viral interactors of
+(`check_export`): each description on one line in one file; each human entry on one line of
+`interactors_human`, the human interactors of the descriptions among them; the viral interactors of
 `descriptions_vh`, each on one line of `interactors_viral`, its sequence as long as its
 coordinates; each mapping on one line, on an interactor of its description, in the file of its
-target; and the numbers, each from its own query: the live descriptions of the runs exported,
+target; and the numbers, each from its own query: the human Swiss-Prot entries and the lines of
+`interactors_human`; the live descriptions of the runs exported,
 those exported and those left out (a human interactor not up to date); the mappings of the
 descriptions exported, the lines written and those merged in homodimers. It ends with `ok`, or
 with the failures and an error, the files left for a look.
