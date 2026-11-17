@@ -28,6 +28,8 @@ jobs:
       - uses: actions/configure-pages@v5
       # Not indexed for now: a noindex meta tag in each deployed page; remove this step to allow indexing.
       - run: sed -i 's|<head>|<head>\n<meta name="robots" content="noindex, nofollow">|' articles/*.html
+      # The agent's instructions for the articles are not published.
+      - run: rm articles/AGENTS.md
       - uses: actions/upload-pages-artifact@v4
         with:
           path: articles
