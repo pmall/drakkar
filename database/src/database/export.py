@@ -277,9 +277,11 @@ def export(
         """
         SELECT 'VH:' || d.stable_id AS stable_id, d.version, a.pmid, m.psimi_id,
                m.name AS method,
-               h.version AS release1, h.accession AS accession1, h.name AS gene_name1,
+               current1.current_version AS release1, h.accession AS accession1,
+               h.name AS gene_name1,
                v.id AS protein2_id, v.ncbi_taxon_id AS strain_ncbi_taxon_id,
-               v.version AS release2, v.accession AS accession2, v.description AS uniprot_name2,
+               coalesce(current2.current_version, v.version) AS release2,
+               v.accession AS accession2, v.description AS uniprot_name2,
                d.name2 AS generic_name2, d.start2, d.stop2, d.mapping1, d.mapping2
         FROM descriptions_vh AS d
         JOIN associations AS a ON a.id = d.association_id
@@ -288,6 +290,8 @@ def export(
         JOIN proteins_versions AS current1
           ON current1.accession = h.accession AND current1.version = h.version
         JOIN proteins AS v ON v.id = d.protein2_id
+        LEFT JOIN proteins_versions AS current2
+          ON current2.accession = v.accession AND current2.version = v.version
         WHERE d.deleted_at IS NULL AND a.run_id = ANY(%s) AND current1.reviewed
         ORDER BY d.stable_id
         """,
@@ -336,8 +340,10 @@ def export(
         """
         SELECT 'HH:' || d.stable_id AS stable_id, d.version, a.pmid, m.psimi_id,
                m.name AS method,
-               h1.version AS release1, h1.accession AS accession1, h1.name AS gene_name1,
-               h2.version AS release2, h2.accession AS accession2, h2.name AS gene_name2,
+               current1.current_version AS release1, h1.accession AS accession1,
+               h1.name AS gene_name1,
+               current2.current_version AS release2, h2.accession AS accession2,
+               h2.name AS gene_name2,
                d.mapping1, d.mapping2
         FROM descriptions_hh AS d
         JOIN associations AS a ON a.id = d.association_id
@@ -376,12 +382,12 @@ def export(
     # the current human Swiss-Prot entries, each with its names and canonical sequence
     cur.execute(
         """
-        SELECT p.version AS release, p.accession, p.name AS gene_name,
+        SELECT v.current_version AS release, p.accession, p.name AS gene_name,
                p.description AS uniprot_name, p.sequences ->> p.accession AS sequence
         FROM proteins_versions AS v
         JOIN proteins AS p ON p.accession = v.accession AND p.version = v.version
         WHERE v.reviewed AND p.type = 'h'
-        ORDER BY p.version, p.accession
+        ORDER BY v.current_version, p.accession
         """
     )
     humans = [list(row) for row in cur.fetchall()]

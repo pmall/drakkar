@@ -93,15 +93,15 @@ def test_export(conn, tmp_path):
     assert [r[0] for r in vh[1:]] == sorted(r[0] for r in vh[1:])
     # a strain placed in its species by placed.tsv
     assert [
-        "VH:EY08ABDB78", "2", "22046132", "MI:0018", "two hybrid", "2019_01", "Q56VL3", "OCIAD2",
+        "VH:EY08ABDB78", "2", "22046132", "MI:0018", "two hybrid", "2026_03", "Q56VL3", "OCIAD2",
         "694009", "SARS-CoV", "nsp13", "663565", "Bat SARS Cov Rs806/2006",
-        "2019_01", "D2DJX6", "Helicase (Fragment)", "nsp13", "1", "601",
+        "2026_03", "D2DJX6", "Helicase (Fragment)", "nsp13", "1", "601",
     ] in vh  # fmt: skip
     # a strain under a species of species.tsv, its deepest
     assert [
         "VH:EY11D825B6", "1", "25031347", "MI:0004", "affinity chromatography technology",
-        "2019_01", "P55209", "NAP1L1", "3052230", "HCV", "NS5A", "356411",
-        "Hepatitis C virus JFH-1", "2019_01", "Q99IB8", "Genome polyprotein", "NS5A",
+        "2026_03", "P55209", "NAP1L1", "3052230", "HCV", "NS5A", "356411",
+        "Hepatitis C virus JFH-1", "2026_03", "Q99IB8", "Genome polyprotein", "NS5A",
         "1977", "2442",
     ] in vh  # fmt: skip
     cur = conn.cursor()
@@ -131,13 +131,32 @@ def test_export(conn, tmp_path):
         """
     )
     name, description, ns5a = cur.fetchone()
-    assert ["2019_01", "Q99IB8", name, description, "1977", "2442", ns5a] in interactors  # a chain
+    assert ["2026_03", "Q99IB8", name, description, "1977", "2442", ns5a] in interactors  # a chain
+    # an obsolete viral snapshot keeps the release it first appeared in; a current one, the
+    # current release
+    cur.execute(
+        """
+        SELECT DISTINCT p.version, p.accession
+        FROM descriptions_vh AS d
+        JOIN proteins AS p ON p.id = d.protein2_id
+        JOIN proteins AS h ON h.id = d.protein1_id
+        JOIN proteins_versions AS current1
+          ON current1.accession = h.accession AND current1.version = h.version
+        WHERE d.deleted_at IS NULL AND current1.reviewed AND NOT EXISTS (
+            SELECT 1 FROM proteins_versions AS v
+            WHERE v.accession = p.accession AND v.version = p.version
+        )
+        """
+    )
+    obsolete_viral = {tuple(row) for row in cur.fetchall()}
+    assert obsolete_viral and obsolete_viral <= {k[:2] for k in keys}
+    assert {k[0] for k in keys} == {"2026_03"} | {release for release, _ in obsolete_viral}
 
     hh = _lines(tmp_path / "out" / "descriptions_hh_run81.tsv")
     assert hh[0] == HH
     assert hh[1] == [
         "HH:EY1F03BBEB", "2", "15471871", "MI:0515", "methyltransferase assay",
-        "2019_01", "Q96RI1", "NR1H4", "2020_03", "P68431", "H3C1",
+        "2026_03", "Q96RI1", "NR1H4", "2026_03", "P68431", "H3C1",
     ]  # fmt: skip
 
     # every current human Swiss-Prot entry once, with its canonical sequence, the human
@@ -147,7 +166,7 @@ def test_export(conn, tmp_path):
     assert humans[1:] == sorted(humans[1:])
     cur.execute(
         """
-        SELECT p.version, p.accession, p.name, p.description, p.sequences ->> p.accession
+        SELECT v.current_version, p.accession, p.name, p.description, p.sequences ->> p.accession
         FROM proteins_versions AS v
         JOIN proteins AS p ON p.accession = v.accession AND p.version = v.version
         WHERE v.reviewed AND p.type = 'h'
@@ -251,14 +270,14 @@ def test_mappings(conn, tmp_path):
     assert h[0] == MAPPINGS_H and v[0] == MAPPINGS_V
     assert h[1:] == sorted(h[1:]) and v[1:] == sorted(v[1:])
     assert [line for line in h if line[0] == "HH:EYD107712D"] == [
-        ["HH:EYD107712D", "MSSN", "2019_01", "Q96RI1", "Q96RI1", "h", "", ""]
+        ["HH:EYD107712D", "MSSN", "2026_03", "Q96RI1", "Q96RI1", "h", "", ""]
     ]
     assert [line for line in h if line[0] == "VH:EY11D825B6"] == [
-        ["VH:EY11D825B6", "AAAA", "2019_01", "P55209", "P55209-2", "v", "", ""],
-        ["VH:EY11D825B6", "MADI", "2019_01", "P55209", "P55209", "v", "", ""],
+        ["VH:EY11D825B6", "AAAA", "2026_03", "P55209", "P55209-2", "v", "", ""],
+        ["VH:EY11D825B6", "MADI", "2026_03", "P55209", "P55209", "v", "", ""],
     ]
     assert [line for line in v if line[0] == "VH:EY11D825B6"] == [
-        ["VH:EY11D825B6", "mSGSWk", "2019_01", "Q99IB8", "1977", "2442", "Q99IB8", "M", "K"]
+        ["VH:EY11D825B6", "mSGSWk", "2026_03", "Q99IB8", "1977", "2442", "Q99IB8", "M", "K"]
     ]
     descriptions = {
         r[0]

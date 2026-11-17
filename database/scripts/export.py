@@ -15,23 +15,24 @@ Each dataset is written as a `.tsv` file, tab-separated under a header line, and
 the same lines; each name ends with `run` and the name of the last vh run exported by ID, each
 character other than a letter, a digit or `-` made a `-`
 (`descriptions_vh_run87.tsv`). A description's stable ID is given after its type, `HH:EY12AB34CD`
-or `VH:CW12AB34CD`: a stable ID is unique within its type only.
+or `VH:CW12AB34CD`: a stable ID is unique within its type only. An interactor's release
+(`release1`, `release2`, `release`) is the UniProt release its snapshot was last confirmed
+against: the current release for a current snapshot, the release the snapshot first appeared in
+for an obsolete one (a viral interactor gone from UniProt or changed since).
 
 - `descriptions_hh`: `stable_id`, `version`, `pmid`, `psimi_id`, `method`; each human interactor:
-  `release1` (the release its snapshot first appeared in), `accession1`, `gene_name1`, then
-  `release2`, `accession2`, `gene_name2`. One line per description, sorted by stable ID.
+  `release1`, `accession1`, `gene_name1`, then `release2`, `accession2`, `gene_name2`. One line per
+  description, sorted by stable ID.
 - `descriptions_vh`: `stable_id`, `version`, `pmid`, `psimi_id`, `method`; the human interactor:
-  `release1` (the release its snapshot first appeared in), `accession1`, `gene_name1`; the viral
-  interactor, on any snapshot, from the most general to the most specific:
-  `species_ncbi_taxon_id`, `species`, `protein` (from `<generic>`), `strain_ncbi_taxon_id`,
-  `strain` (its scientific name, empty when the taxon is missing from the NCBI taxonomy),
-  `release2`, `accession2`, `uniprot_name2` (the UniProt protein name), `generic_name2`,
-  `start2`, `stop2`. One line per description, sorted by stable ID.
-- `interactors_human`: `release` (the release its snapshot first appeared in), `accession`,
-  `gene_name`, `uniprot_name` (the UniProt protein name), `sequence` (the canonical sequence): one
-  line per human Swiss-Prot entry of the latest UniProt release, on its current snapshot, the human
-  interactors of both descriptions datasets among them, sorted by its columns. Swiss-Prot as
-  Drakkar uses it, without downloading it again.
+  `release1`, `accession1`, `gene_name1`; the viral interactor, on any snapshot, from the most
+  general to the most specific: `species_ncbi_taxon_id`, `species`, `protein` (from `<generic>`),
+  `strain_ncbi_taxon_id`, `strain` (its scientific name, empty when the taxon is missing from the
+  NCBI taxonomy), `release2`, `accession2`, `uniprot_name2` (the UniProt protein name),
+  `generic_name2`, `start2`, `stop2`. One line per description, sorted by stable ID.
+- `interactors_human`: `release`, `accession`, `gene_name`, `uniprot_name` (the UniProt protein
+  name), `sequence` (the canonical sequence): one line per human Swiss-Prot entry of the latest
+  UniProt release, on its current snapshot, the human interactors of both descriptions datasets
+  among them, sorted by its columns. Swiss-Prot as Drakkar uses it, without downloading it again.
 - `interactors_viral`: `release`, `accession`, `gene_name`, `uniprot_name`, as in
   `interactors_human`, `start`, `stop`, `sequence` (the canonical sequence from start to stop): one
   line per viral interactor of `descriptions_vh` (`release2`, `accession2`, `start2`, `stop2`),
