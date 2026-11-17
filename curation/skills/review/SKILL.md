@@ -10,7 +10,7 @@ You review a curated batch: each publication is reviewed by a `reviewer` agent, 
 
 ## Environment
 
-- `<batch>`: the batch directory the prompt names, in `<workdir>`, the curation's root directory, written as its absolute path (`realpath`), so that the `dir` each reviewer is sent is right from any directory. Its publications are those of `<batch>/pmids.txt` whose directory `<batch>/<pmid>/` holds `descriptions.jsonl` and `curation.txt`; the others are not reviewed.
+- `<batch>`: the batch directory the prompt names, in `<datadir>/curation/`, written as its absolute path (`realpath`), so that the `dir` each reviewer is sent is right from any directory. Its publications are those of `<batch>/pmids.txt` whose directory `<batch>/<pmid>/` holds `descriptions.jsonl` and `curation.txt`; the others are not reviewed.
 - `<batch>/<pmid>/descriptions.jsonl`: the publication's curation, whole: one description per line, `{"pmid", "method", "accession1", "accession2", "start2", "stop2", "name2", "mappings1", "mappings2", "note"}`, `note` the description note.
 - `<batch>/<pmid>/curation.txt`: the publication note, its first word the state, `CURATED`, or `SELECTED` when a relevant file could not be had.
 - `<batch>/author.txt`: the curation's author, which names the batch's notes when it is committed.

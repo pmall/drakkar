@@ -207,7 +207,7 @@ def parse_one(args: tuple[Path, str]) -> tuple[str, int]:
 
 def parse(release_directory: Path) -> None:
     start = time.time()
-    directory = release_directory / "uniprot"
+    directory = release_directory
     todo = [(directory, s) for s in SOURCES if not tsv_path(directory, s).exists()]
     for source in SOURCES:
         if (directory, source) not in todo:
@@ -283,7 +283,7 @@ def upgrade(conn: psycopg.Connection, release_directory: Path, *, commit: bool) 
     `proteins` raises `ValueError`."""
     start = time.time()
     release = release_directory.resolve().name
-    directory = release_directory / "uniprot"
+    directory = release_directory
     reports = release_directory / "reports"
     reports.mkdir(exist_ok=True)
     require_idle(conn)

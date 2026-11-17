@@ -3,7 +3,7 @@ without writing.
 
     uv run ./database/scripts/check.py <dir>
 
-The report, written to the directory (`<workdir>/<release>/reports/check`, say), is a Markdown
+The report, written to the directory (`<release_directory>/reports/check/`, say), is a Markdown
 summary, `check.md`, plus one TSV file per violated invariant, `<invariant>.tsv`, one row per
 violation, with the stable ID and PMID when relevant. The exit code is 1 if any error is found.
 """

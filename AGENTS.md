@@ -10,7 +10,7 @@ Drakkar is the curation database of virus–human protein–protein interactions
 - `.claude/` links the agents and the skills of both packages for Claude Code; every skill is started by the user only, and the precurator, curator and reviewer agents preload the `precurate-one`, `curate-one` and `review-one` skills.
 - `database/docs/history/` and `curation/docs/history/`: the record of the move from manual curation to Claude's curation, with its dates, counts and measurements, one file each, in the package of its subject. Closed: nothing is added to it. The reference docs never point to it.
 - `articles/`: articles about the repository for readers outside it, each dated in its name and never updated: what it says is true at its date. Each is one self-contained HTML file, its data and scripts embedded: its CSS starts with a copy of `articles/theme.css`, the base theme of the articles, never linked, and adds what that article needs. `articles/index.html` lists them, newest first, and gets an entry with each new one. `.github/workflows/pages.yml` publishes the folder on GitHub Pages at each push to master that changes it. The reference docs never point to them.
-- `<workdir>/` stands for the directory where a job works, which may differ from one job to another: the user names it, otherwise find it or ask. Work directories and scratch files are disposable: docs never point to their contents, what a reader needs is written in the doc itself.
+- `<datadir>/`, the data directory the user's global configuration sets, holds the work directories: `<datadir>/curation/`, the curation's runs, one directory `run<name>/` per run; `<datadir>/exports/`, the exports of the Drakkar database, one directory `run<name>/` per cut run; `<datadir>/uniprot/`, the UniProt releases loaded into the Drakkar database, one directory per release named after it (`2026_04/`): its UniProt files, `taxonomy/` (the NCBI taxonomy loaded with it) and `reports/`. Any other job works in the directory the user names, otherwise ask. Work directories and scratch files are disposable: docs never point to their contents, what a reader needs is written in the doc itself.
 
 ## Docs
 
@@ -57,3 +57,4 @@ Drakkar is the curation database of virus–human protein–protein interactions
 ## Git
 
 - Never commit, amend or push without the user's explicit request for it: write the files, show them, and ask.
+- A commit message is a short title in the imperative, then, after a blank line, a body whose lines are never wrapped by hand: one line per paragraph, saying what changes and why.

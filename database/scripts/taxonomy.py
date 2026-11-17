@@ -1,10 +1,10 @@
 """Load or update the NCBI taxonomy (`taxon`, `taxon_name`) for a UniProt release.
 
-    uv run ./database/scripts/taxonomy.py <workdir>/<release> [--commit]
+    uv run ./database/scripts/taxonomy.py <release_directory> [--commit]
 
 The first script of a release, before `uniprot.py`, on the same directory, named after the
 release. The taxonomy is scoped by UniProt release: the dump loaded with a release is kept next to
-it, in `<workdir>/<release>/taxonomy/`, the NCBI `taxdump.tar.gz` unpacked (`nodes.dmp`,
+it, in `<release_directory>/taxonomy/`, the NCBI `taxdump.tar.gz` unpacked (`nodes.dmp`,
 `names.dmp`, `merged.dmp`); how it is loaded is described in `database/src/database/taxonomy.py`.
 Everything runs in one transaction. Without `--commit`, a dry run: it is rolled back. Its steps are
 logged on stderr.

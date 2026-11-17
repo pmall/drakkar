@@ -1,18 +1,18 @@
 """Upgrade the Drakkar proteins to a new UniProt release.
 
-    uv run ./database/scripts/uniprot.py parse <workdir>/<release>
-    uv run ./database/scripts/uniprot.py upgrade <workdir>/<release> [--commit]
+    uv run ./database/scripts/uniprot.py parse <release_directory>
+    uv run ./database/scripts/uniprot.py upgrade <release_directory> [--commit]
 
 Run after `taxonomy.py`, on the same directory, named after the release. It reads the UniProt FTP
 files: `uniprot_sprot_human.xml.gz` (human, Swiss-Prot), `uniprot_sprot_viruses.xml.gz` and
 `uniprot_trembl_viruses.xml.gz` (all viruses), `uniprot_sprot_varsplic.fasta.gz` (isoforms).
 
-Files are scoped by release: `<workdir>/<release>/` holds `taxonomy/` (the NCBI taxdump loaded with
-this release), `uniprot/` (the FTP files and their parsed TSV) and `reports/`.
+Files are scoped by release: `<release_directory>/` holds the FTP files and their parsed TSV,
+`taxonomy/` (the NCBI taxdump loaded with this release) and `reports/`.
 
 Two steps:
 
-1. `parse`: each XML file of `uniprot/` is converted into a TSV file next to it; one already
+1. `parse`: each XML file of the directory is converted into a TSV file next to it; one already
    there is kept.
 2. `upgrade`: the TSV files are staged, then, in one transaction (without `--commit`, a dry run
    that rolls back):

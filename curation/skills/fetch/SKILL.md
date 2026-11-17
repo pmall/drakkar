@@ -12,10 +12,9 @@ You download the publications one after another: each is taken as far as it can 
 
 1. **Parameters**, from the prompt, otherwise by default:
 
-   - `<workdir>`: the curation's root directory.
    - `<run>`: the run's name (`runs.name`), as the user gives it; by default the oldest run with candidates, or with complete publications in its pool.
    - `<size>`: the batch size, 20 by default.
-   - `<pool>`: `<workdir>/run<run>/pool/`, a directory `<pool>/<pmid>/` per publication being downloaded.
+   - `<pool>`: `<datadir>/curation/run<run>/pool/`, a directory `<pool>/<pmid>/` per publication being downloaded.
    - The candidates, in this order: the pool's publications whose download is not complete, but those closed to which the proxy gives no access, as their line in its status says; then the run's publications `selected` with no AI pass, listed in no `pmids.txt` of the run's batches and not in the pool.
 
 2. **One publication**, the next candidate, taken as far as it can go. One of the pool is taken up where it stopped: from the tools without its manifest, from the browser with it, as `./curation/scripts/fetch.py` would rewrite the manifest without the files the browser added.
@@ -26,7 +25,7 @@ You download the publications one after another: each is taken as far as it can 
 
 3. **The next publication**, the same way, until the pool holds `<size>` complete publications or no candidate is left. A site that starts refusing every request: stop downloading from it; the pool keeps what is done, for the next session.
 
-4. **Batch**: `<batch>`, `<workdir>/run<run>/batch<n>/`, `<n>` the next batch number in the run. Move the complete publications, up to `<size>`, from `<pool>/<pmid>/` to `<batch>/<pmid>/`, remove their lines from `status.tsv`, then write `<batch>/pmids.txt`, one PMID per line, last: a batch with its `pmids.txt` is ready for the `curate` skill.
+4. **Batch**: `<batch>`, `<datadir>/curation/run<run>/batch<n>/`, `<n>` the next batch number in the run. Move the complete publications, up to `<size>`, from `<pool>/<pmid>/` to `<batch>/<pmid>/`, remove their lines from `status.tsv`, then write `<batch>/pmids.txt`, one PMID per line, last: a batch with its `pmids.txt` is ready for the `curate` skill.
 
 5. **Reply**: the batch and its publications; the publications left in the pool, each with what is missing and what was tried.
 
